@@ -60,7 +60,7 @@ function PartnerOrderDetail() {
       </Link>
 
       <div className="mt-3 space-y-4">
-        <OrderDetailCard order={order} />
+        <OrderDetailCard order={order} hideDeliveryFee />
 
         {/* Pending үед л засах/цуцлах */}
         {order.status === "pending" && (

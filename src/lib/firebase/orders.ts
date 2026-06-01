@@ -2,6 +2,7 @@ import {
   addDoc,
   collection,
   doc,
+  getDoc,
   getDocs,
   limit,
   onSnapshot,
@@ -13,6 +14,7 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { isFinalOrderStatus } from "@/lib/status";
 import type { DeliveryType, Order, OrderStatus } from "@/types";
 
 const COLLECTION = "orders";
@@ -345,7 +347,14 @@ export async function assignDriver(
   driverName: string,
   driverPhone: string,
 ): Promise<void> {
-  await updateDoc(doc(db, COLLECTION, orderId), {
+  const ref = doc(db, COLLECTION, orderId);
+  // Дууссан (delivered/failed/cancelled) захиалгад жолооч дахин оноохгүй.
+  const snap = await getDoc(ref);
+  const current = snap.data()?.status as OrderStatus | undefined;
+  if (current && isFinalOrderStatus(current)) {
+    throw new Error("Дууссан захиалгад жолооч дахин оноох боломжгүй.");
+  }
+  await updateDoc(ref, {
     driverId,
     driverName,
     driverPhone,

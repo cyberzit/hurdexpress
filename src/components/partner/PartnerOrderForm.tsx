@@ -7,7 +7,6 @@ import { getCompany } from "@/lib/firebase/companies";
 import { subscribeProductsByCompany } from "@/lib/firebase/products";
 import { addOrder, type OrderInput } from "@/lib/firebase/orders";
 import { logActivity } from "@/lib/firebase/activity";
-import { getSettings } from "@/lib/settings";
 import AddressForm, {
   EMPTY_ADDRESS,
   type AddressValue,
@@ -26,6 +25,9 @@ export default function PartnerOrderForm() {
   const companyId = profile?.companyId ?? "";
 
   const [companyName, setCompanyName] = useState("");
+  // Хүргэлтийн үнэ нь гэрээт байгууллагын contractPrice-аас автоматаар ирнэ
+  // (partner өөрөө оруулахгүй/өөрчлөхгүй).
+  const [contractPrice, setContractPrice] = useState(0);
   const [products, setProducts] = useState<Product[]>([]);
 
   const [productId, setProductId] = useState("");
@@ -35,30 +37,21 @@ export default function PartnerOrderForm() {
   const [address, setAddress] = useState<AddressValue>(EMPTY_ADDRESS);
   const [qty, setQty] = useState("1");
   const [codAmount, setCodAmount] = useState("0");
-  const [deliveryPrice, setDeliveryPrice] = useState("6000");
   const [note, setNote] = useState("");
 
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  // Байгууллагын нэр
+  // Байгууллагын нэр + гэрээт хүргэлтийн үнэ.
   useEffect(() => {
     if (!companyId) return;
     getCompany(companyId)
-      .then((c) => setCompanyName(c?.name ?? ""))
-      .catch(() => {});
-  }, [companyId]);
-
-  // Үндсэн хүргэлтийн үнийг settings-ээс (нэг удаа, mount дээр).
-  useEffect(() => {
-    getSettings()
-      .then((s) => {
-        if (s?.defaultDeliveryPrice != null) {
-          setDeliveryPrice(String(s.defaultDeliveryPrice));
-        }
+      .then((c) => {
+        setCompanyName(c?.name ?? "");
+        setContractPrice(c?.contractPrice ?? 0);
       })
       .catch(() => {});
-  }, []);
+  }, [companyId]);
 
   // Өөрийн байгууллагын active бараанууд (real-time)
   useEffect(() => {
@@ -70,8 +63,6 @@ export default function PartnerOrderForm() {
     );
     return () => unsub();
   }, [companyId]);
-
-  const totalAmount = (Number(codAmount) || 0) + (Number(deliveryPrice) || 0);
 
   function handleProductChange(id: string) {
     setProductId(id);
@@ -107,10 +98,6 @@ export default function PartnerOrderForm() {
     if (!qty.trim() || Number.isNaN(qtyNum) || qtyNum < 1) {
       return setError("Тоо ширхэг зөв тоо байх ёстой.");
     }
-    const deliveryNum = Number(deliveryPrice);
-    if (!deliveryPrice.trim() || Number.isNaN(deliveryNum) || deliveryNum < 0) {
-      return setError("Хүргэлтийн үнэ зөв тоо байх ёстой.");
-    }
 
     const product = products.find((p) => p.id === productId);
     const isCity = address.deliveryType === "city";
@@ -139,7 +126,8 @@ export default function PartnerOrderForm() {
       productId: product?.id,
       productName: product?.name,
       qty: qtyNum,
-      deliveryPrice: deliveryNum,
+      // Хүргэлтийн үнэ — гэрээт байгууллагын contractPrice (partner өөрчлөхгүй).
+      deliveryPrice: contractPrice,
       codAmount: Number(codAmount) || 0,
       note,
       createdByUid: profile?.uid,
@@ -239,7 +227,7 @@ export default function PartnerOrderForm() {
         <AddressForm value={address} onChange={setAddress} disabled={busy} />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label className={labelClass}>Тоо ширхэг *</label>
           <input
@@ -263,18 +251,6 @@ export default function PartnerOrderForm() {
             disabled={busy}
           />
         </div>
-        <div>
-          <label className={labelClass}>Хүргэлтийн үнэ (₮) *</label>
-          <input
-            className={inputClass}
-            type="number"
-            min={0}
-            step={100}
-            value={deliveryPrice}
-            onChange={(e) => setDeliveryPrice(e.target.value)}
-            disabled={busy}
-          />
-        </div>
       </div>
 
       <div>
@@ -285,13 +261,6 @@ export default function PartnerOrderForm() {
           onChange={(e) => setNote(e.target.value)}
           disabled={busy}
         />
-      </div>
-
-      <div className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
-        <span className="text-sm font-medium text-slate-600">Нийт дүн</span>
-        <span className="text-lg font-bold text-navy">
-          {totalAmount.toLocaleString("mn-MN")}₮
-        </span>
       </div>
 
       <div className="flex gap-3">

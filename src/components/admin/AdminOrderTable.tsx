@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import StatusBadge from "@/components/admin/StatusBadge";
+import { isFinalOrderStatus } from "@/lib/status";
 import { ORDER_STATUS_LABELS, type Order, type OrderStatus } from "@/types";
 
 const STATUSES = Object.keys(ORDER_STATUS_LABELS) as OrderStatus[];
@@ -15,15 +16,20 @@ interface Props {
 function StatusSelect({
   order,
   onStatusChange,
+  disabled,
 }: {
   order: Order;
   onStatusChange: Props["onStatusChange"];
+  disabled?: boolean;
 }) {
   return (
     <select
       value={order.status}
+      disabled={disabled}
       onChange={(e) => onStatusChange(order, e.target.value as OrderStatus)}
-      className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-navy outline-none transition focus:border-brand"
+      className={`rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-navy outline-none transition focus:border-brand ${
+        disabled ? "cursor-not-allowed opacity-60" : ""
+      }`}
     >
       {STATUSES.map((s) => (
         <option key={s} value={s}>
@@ -31,6 +37,17 @@ function StatusSelect({
         </option>
       ))}
     </select>
+  );
+}
+
+// Дууссан захиалга дээр харуулах badge.
+function DoneBadge({ className = "" }: { className?: string }) {
+  return (
+    <span
+      className={`rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-500 ${className}`}
+    >
+      Дууссан
+    </span>
   );
 }
 
@@ -52,7 +69,9 @@ export default function AdminOrderTable({ orders, onAssign, onStatusChange }: Pr
             </tr>
           </thead>
           <tbody>
-            {orders.map((o) => (
+            {orders.map((o) => {
+              const final = isFinalOrderStatus(o.status);
+              return (
               <tr
                 key={o.id}
                 className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60"
@@ -88,13 +107,17 @@ export default function AdminOrderTable({ orders, onAssign, onStatusChange }: Pr
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center justify-end gap-2">
-                    <StatusSelect order={o} onStatusChange={onStatusChange} />
-                    <button
-                      onClick={() => onAssign(o)}
-                      className="rounded-lg bg-navy px-3 py-1.5 text-xs font-medium text-white transition hover:bg-navy-light"
-                    >
-                      Жолооч
-                    </button>
+                    <StatusSelect order={o} onStatusChange={onStatusChange} disabled={final} />
+                    {final ? (
+                      <DoneBadge />
+                    ) : (
+                      <button
+                        onClick={() => onAssign(o)}
+                        className="rounded-lg bg-navy px-3 py-1.5 text-xs font-medium text-white transition hover:bg-navy-light"
+                      >
+                        Жолооч
+                      </button>
+                    )}
                     <Link
                       href={`/admin/orders/print?id=${o.id}`}
                       title="QR / Хэвлэх"
@@ -105,14 +128,17 @@ export default function AdminOrderTable({ orders, onAssign, onStatusChange }: Pr
                   </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
 
       {/* Mobile — card list */}
       <div className="space-y-3 md:hidden">
-        {orders.map((o) => (
+        {orders.map((o) => {
+          const final = isFinalOrderStatus(o.status);
+          return (
           <div
             key={o.id}
             className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
@@ -141,16 +167,21 @@ export default function AdminOrderTable({ orders, onAssign, onStatusChange }: Pr
             </div>
 
             <div className="mt-3 flex items-center gap-2">
-              <StatusSelect order={o} onStatusChange={onStatusChange} />
-              <button
-                onClick={() => onAssign(o)}
-                className="flex-1 rounded-lg bg-navy px-3 py-2 text-xs font-medium text-white transition hover:bg-navy-light"
-              >
-                Жолооч оноох
-              </button>
+              <StatusSelect order={o} onStatusChange={onStatusChange} disabled={final} />
+              {final ? (
+                <DoneBadge className="flex-1 text-center" />
+              ) : (
+                <button
+                  onClick={() => onAssign(o)}
+                  className="flex-1 rounded-lg bg-navy px-3 py-2 text-xs font-medium text-white transition hover:bg-navy-light"
+                >
+                  Жолооч оноох
+                </button>
+              )}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </>
   );

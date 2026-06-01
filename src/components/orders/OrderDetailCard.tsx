@@ -19,7 +19,14 @@ function OptRow({ label, value }: { label: string; value?: string }) {
 }
 
 // Захиалгын бүх мэдээллийг харуулах дахин ашиглах карт (admin/partner/driver).
-export default function OrderDetailCard({ order }: { order: Order }) {
+// hideDeliveryFee — partner-д хүргэлтийн үнэ/нийт дүн нуух (гэрээт үнэ дотоод).
+export default function OrderDetailCard({
+  order,
+  hideDeliveryFee = false,
+}: {
+  order: Order;
+  hideDeliveryFee?: boolean;
+}) {
   const item = order.productName || order.itemName || "—";
   const mapsUrl = order.location
     ? `https://www.google.com/maps?q=${order.location.lat},${order.location.lng}`
@@ -108,19 +115,23 @@ export default function OrderDetailCard({ order }: { order: Order }) {
         <div className="mt-2">
           <Row label="COD дүн" value={formatCurrency(order.codAmount)} />
         </div>
-        <div className="mt-2">
-          <Row label="Хүргэлтийн үнэ" value={formatCurrency(order.deliveryPrice)} />
-        </div>
-        <div className="mt-3 border-t border-slate-100 pt-2">
-          <Row
-            label="Нийт дүн"
-            value={
-              <span className="text-base font-bold text-navy">
-                {formatCurrency(order.totalAmount)}
-              </span>
-            }
-          />
-        </div>
+        {!hideDeliveryFee && (
+          <>
+            <div className="mt-2">
+              <Row label="Хүргэлтийн үнэ" value={formatCurrency(order.deliveryPrice)} />
+            </div>
+            <div className="mt-3 border-t border-slate-100 pt-2">
+              <Row
+                label="Нийт дүн"
+                value={
+                  <span className="text-base font-bold text-navy">
+                    {formatCurrency(order.totalAmount)}
+                  </span>
+                }
+              />
+            </div>
+          </>
+        )}
       </Card>
 
       {/* Жолооч */}

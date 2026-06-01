@@ -10,6 +10,7 @@ import LoadingState from "@/components/ui/LoadingState";
 import { subscribeCompanies } from "@/lib/firebase/companies";
 import { subscribeDrivers } from "@/lib/firebase/drivers";
 import { subscribeOrders, updateOrderStatus } from "@/lib/firebase/orders";
+import { isFinalOrderStatus } from "@/lib/status";
 import {
   ORDER_STATUS_LABELS,
   type Company,
@@ -33,6 +34,23 @@ export default function OrdersPage() {
   const [driverFilter, setDriverFilter] = useState("");
 
   const [assignOrder, setAssignOrder] = useState<Order | null>(null);
+  const [toast, setToast] = useState("");
+
+  // Toast автомат арилгах.
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(""), 3000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  // Жолооч оноох — дууссан захиалгад зөвшөөрөхгүй (modal нээхгүй).
+  function handleAssign(order: Order) {
+    if (isFinalOrderStatus(order.status)) {
+      setToast("Дууссан захиалгад жолооч дахин оноох боломжгүй.");
+      return;
+    }
+    setAssignOrder(order);
+  }
 
   useEffect(() => {
     const unsub = subscribeOrders(
@@ -170,7 +188,7 @@ export default function OrdersPage() {
         ) : (
           <AdminOrderTable
             orders={filtered}
-            onAssign={(o) => setAssignOrder(o)}
+            onAssign={handleAssign}
             onStatusChange={handleStatusChange}
           />
         )}
@@ -182,6 +200,13 @@ export default function OrdersPage() {
           drivers={activeDrivers}
           onClose={() => setAssignOrder(null)}
         />
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-xl bg-navy px-5 py-3 text-sm font-medium text-white shadow-lg">
+          {toast}
+        </div>
       )}
     </div>
   );

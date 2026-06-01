@@ -5,6 +5,13 @@ export function orderStatusLabel(status: OrderStatus): string {
   return ORDER_STATUS_LABELS[status] ?? status;
 }
 
+// Эцсийн (дууссан) статусууд — цаашид жолооч/статус өөрчлөхгүй.
+export const FINAL_ORDER_STATUSES: OrderStatus[] = ["delivered", "failed", "cancelled"];
+
+export function isFinalOrderStatus(status: OrderStatus): boolean {
+  return FINAL_ORDER_STATUSES.includes(status);
+}
+
 // Badge (pill) өнгөний класс — бүх хүснэгт/карт нэг стандарт ашиглана.
 export const ORDER_STATUS_BADGE: Record<OrderStatus, string> = {
   pending: "bg-amber-50 text-amber-700",

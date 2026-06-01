@@ -16,7 +16,7 @@ export default function OrderQRCode({
 
   useEffect(() => {
     const base = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
-    const t = setTimeout(() => setValue(`${base}/track/${orderCode}`), 0);
+    const t = setTimeout(() => setValue(`${base}/track/view?code=${orderCode}`), 0);
     return () => clearTimeout(t);
   }, [orderCode]);
 

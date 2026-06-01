@@ -13,7 +13,7 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { Order, OrderStatus } from "@/types";
+import type { DeliveryType, Order, OrderStatus } from "@/types";
 
 const COLLECTION = "orders";
 
@@ -23,6 +23,19 @@ export interface OrderInput {
   receiverName: string;
   receiverPhone: string;
   receiverAddress: string;
+  // Хүргэлтийн бүс + бүтэцлэгдсэн хаяг (заавал биш — хуучин урсгалтай нийцэнэ).
+  deliveryType?: DeliveryType;
+  cityDistrict?: string;
+  cityKhoroo?: string;
+  street?: string;
+  building?: string;
+  entrance?: string;
+  entranceCode?: string;
+  addressNote?: string;
+  province?: string;
+  soum?: string;
+  terminalName?: string;
+  location?: { lat: number; lng: number };
   itemName: string;
   productId?: string;
   productName?: string;
@@ -62,11 +75,30 @@ function mapOrder(id: string, data: Record<string, unknown>): Order {
     codAmount: (data.codAmount as number) ?? 0,
     totalAmount: (data.totalAmount as number) ?? 0,
     note: data.note as string | undefined,
+    deliveryType: data.deliveryType as DeliveryType | undefined,
+    cityDistrict: data.cityDistrict as string | undefined,
+    cityKhoroo: data.cityKhoroo as string | undefined,
+    street: data.street as string | undefined,
+    building: data.building as string | undefined,
+    entrance: data.entrance as string | undefined,
+    entranceCode: data.entranceCode as string | undefined,
+    addressNote: data.addressNote as string | undefined,
+    province: data.province as string | undefined,
+    soum: data.soum as string | undefined,
+    terminalName: data.terminalName as string | undefined,
+    location: data.location
+      ? {
+          lat: (data.location as Record<string, unknown>).lat as number,
+          lng: (data.location as Record<string, unknown>).lng as number,
+        }
+      : undefined,
+    routeOrder: data.routeOrder as number | undefined,
     status: (data.status as OrderStatus) ?? "pending",
     createdByUid: data.createdByUid as string | undefined,
     driverId: data.driverId as string | undefined,
     driverName: data.driverName as string | undefined,
     driverPhone: data.driverPhone as string | undefined,
+    autoAssigned: data.autoAssigned as boolean | undefined,
     assignedAt: data.assignedAt ? toMillis(data.assignedAt) : undefined,
     pickedUpAt: data.pickedUpAt ? toMillis(data.pickedUpAt) : undefined,
     deliveredAt: data.deliveredAt ? toMillis(data.deliveredAt) : undefined,
@@ -168,6 +200,20 @@ export async function addOrder(input: OrderInput): Promise<CreatedOrder> {
   if (input.productName?.trim()) payload.productName = input.productName.trim();
   if (input.note?.trim()) payload.note = input.note.trim();
   if (input.createdByUid) payload.createdByUid = input.createdByUid;
+
+  // Хүргэлтийн бүс + бүтэцлэгдсэн хаяг (хоосон биш утгуудыг л бичнэ).
+  if (input.deliveryType) payload.deliveryType = input.deliveryType;
+  if (input.cityDistrict?.trim()) payload.cityDistrict = input.cityDistrict.trim();
+  if (input.cityKhoroo?.trim()) payload.cityKhoroo = input.cityKhoroo.trim();
+  if (input.street?.trim()) payload.street = input.street.trim();
+  if (input.building?.trim()) payload.building = input.building.trim();
+  if (input.entrance?.trim()) payload.entrance = input.entrance.trim();
+  if (input.entranceCode?.trim()) payload.entranceCode = input.entranceCode.trim();
+  if (input.addressNote?.trim()) payload.addressNote = input.addressNote.trim();
+  if (input.province?.trim()) payload.province = input.province.trim();
+  if (input.soum?.trim()) payload.soum = input.soum.trim();
+  if (input.terminalName?.trim()) payload.terminalName = input.terminalName.trim();
+  if (input.location) payload.location = input.location;
 
   const ref = await addDoc(collection(db, COLLECTION), payload);
   return { id: ref.id, orderCode };
@@ -303,6 +349,7 @@ export async function assignDriver(
     driverId,
     driverName,
     driverPhone,
+    autoAssigned: false, // гараар оноосон (Cloud Function авто-онооход true болгоно)
     status: "assigned" as OrderStatus,
     assignedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),

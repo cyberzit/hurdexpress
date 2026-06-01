@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { assignDriver } from "@/lib/firebase/orders";
 import { logActivity } from "@/lib/firebase/activity";
+import { pickBestDriver } from "@/lib/autoDispatch";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   DRIVER_STATUS_LABELS,
@@ -22,6 +23,9 @@ export default function AssignDriverModal({ order, drivers, onClose }: Props) {
   const [selectedId, setSelectedId] = useState(order.driverId ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  // Авто-dispatch-тэй ижил логикоор санал болгох жолооч.
+  const suggested = useMemo(() => pickBestDriver(drivers, order), [drivers, order]);
 
   async function handleAssign() {
     const driver = drivers.find((d) => d.id === selectedId);
@@ -83,6 +87,23 @@ export default function AssignDriverModal({ order, drivers, onClose }: Props) {
             <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
               {error}
             </p>
+          )}
+
+          {/* Авто-dispatch санал */}
+          {suggested && suggested.id !== selectedId && (
+            <button
+              type="button"
+              onClick={() => setSelectedId(suggested.id)}
+              className="mb-3 flex w-full items-center justify-between rounded-xl border border-brand/30 bg-brand/5 px-4 py-2.5 text-left transition hover:bg-brand/10"
+            >
+              <span className="text-sm text-navy">
+                💡 Санал болгох: <span className="font-semibold">{suggested.name}</span>
+                <span className="ml-1 text-xs text-slate-500">
+                  ({suggested.currentOrderCount ?? 0} идэвхтэй захиалга)
+                </span>
+              </span>
+              <span className="text-xs font-medium text-brand">Сонгох</span>
+            </button>
           )}
 
           {drivers.length === 0 ? (

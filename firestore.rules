@@ -143,6 +143,20 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // ── driverSettlements (жолоочийн COD өдөр хаалт) ──────────
+    // Жолооч өөрийн тооцоог үүсгэж/илгээнэ; admin батлах/буцаах/тэмдэглэл.
+    match /driverSettlements/{id} {
+      allow read: if isAdmin()
+        || (isActiveDriver() && resource.data.driverId == myDriverId());
+      allow create: if isAdmin()
+        || (isActiveDriver() && request.resource.data.driverId == myDriverId());
+      allow update: if isAdmin()
+        || (isActiveDriver()
+            && resource.data.driverId == myDriverId()
+            && request.resource.data.driverId == myDriverId());
+      allow delete: if false;
+    }
+
     // ── notifications ────────────────────────────────────────
     // Хэрэглэгч зөвхөн өөрийнхөө мэдэгдэл уншина, зөвхөн isRead-г засна.
     // Үүсгэх — зөвхөн admin (бусад тохиолдолд Cloud Function ашиглана).

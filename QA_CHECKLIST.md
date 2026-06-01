@@ -109,16 +109,15 @@ Demo бүртгэлүүд (нууц үг: `Demo123!`):
 - [ ] Safe-area (notch / home indicator) padding зөв
 - [ ] Офлайн болгоход улаан "Интернет холболтоо шалгана уу" банер
 
-## 9. Firebase Hosting deploy test
-- [ ] `npm run build` алдаагүй
+## 9. Firebase Hosting (static export) deploy test
+- [ ] `npm run build` алдаагүй → `out/` хавтас үүснэ
 - [ ] `npm run lint` цэвэр
-- [ ] `firebase experiments:enable webframeworks`
-- [ ] `npm run firebase:deploy:rules` амжилттай
-- [ ] `npm run firebase:deploy:functions` (Blaze) — trackOrder deploy
-- [ ] `npm run firebase:deploy:hosting` — Next.js app
+- [ ] `npm run deploy:rules` амжилттай
+- [ ] `npm run deploy:functions` (Blaze) — trackOrder deploy
+- [ ] `npm run deploy` — build + hosting (`out/`)
 - [ ] Hosting URL дээр `/login` ачаалагдана
-- [ ] `/admin/*`, `/partner/*`, `/driver/*` dynamic route ажиллана
-- [ ] `/api/track-order?code=...` → trackOrder function хариулна
+- [ ] `/admin/*`, `/partner/*`, `/driver/*` болон `?id=` detail route ажиллана
+- [ ] `/track/view?code=...` → trackOrder function хариулна
 - [ ] Production дээр tracking утас masked, хаяг нуусан
 
 ---

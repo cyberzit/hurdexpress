@@ -17,6 +17,26 @@ export interface UserDoc {
   createdAt: Timestamp;
 }
 
+// users/{uid} document-ийг удирдлагад ашиглах (uid + ms timestamp) хэлбэр
+export interface User {
+  uid: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: StaffRole;
+  companyId?: string;
+  driverId?: string;
+  isActive: boolean;
+  createdAt: number; // ms
+  updatedAt: number; // ms
+}
+
+export const STAFF_ROLE_LABELS: Record<StaffRole, string> = {
+  admin: "Админ",
+  partner: "Харилцагч",
+  driver: "Жолооч",
+};
+
 // Харилцагч байгууллага (Firestore: companies)
 export interface Company {
   id: string;
@@ -27,6 +47,8 @@ export interface Company {
   contractPrice: number; // гэрээт хүргэлтийн үнэ (₮)
   contactPerson?: string;
   note?: string;
+  managerName?: string; // партнер хэрэглэгчийн нэр (нэвтрэх эзэн)
+  managerEmail?: string; // партнерийн нэвтрэх имэйл (Auth)
   isActive: boolean;
   createdAt: number; // ms
   updatedAt: number; // ms
@@ -40,7 +62,10 @@ export interface Product {
   name: string;
   sku?: string;
   price: number;
-  photoUrl?: string;
+  photoUrl?: string; // үндсэн зураг (webp, 800px)
+  thumbnailUrl?: string; // жижиг зураг (webp, 250px)
+  imagePath?: string; // Storage зам — main.webp (солих/устгахад)
+  thumbnailPath?: string; // Storage зам — thumb.webp
   description?: string;
   isActive: boolean;
   createdAt: number; // ms
@@ -59,6 +84,13 @@ export interface Driver {
   vehicleType: VehicleType;
   plateNumber?: string;
   currentStatus: DriverStatus;
+  // Auto-dispatch талбарууд
+  currentOrderCount: number; // идэвхтэй оноогдсон захиалгын тоо (load balancing)
+  serviceDistricts?: string[]; // үйлчилдэг дүүргүүд (district matching)
+  lastLocation?: { lat: number; lng: number }; // сүүлийн байршил (proximity)
+  // Нэвтрэх эрх (Firebase Auth)
+  authUid?: string; // холбоотой Auth хэрэглэгчийн uid
+  loginEmail?: string; // нэвтрэх имэйл
   isActive: boolean;
   createdAt: number; // ms
   updatedAt: number; // ms
@@ -87,6 +119,14 @@ export type OrderStatus =
   | "failed"
   | "cancelled";
 
+// Хүргэлтийн бүс — нийслэл эсвэл орон нутаг
+export type DeliveryType = "city" | "province";
+
+export const DELIVERY_TYPE_LABELS: Record<DeliveryType, string> = {
+  city: "Нийслэл",
+  province: "Орон нутаг",
+};
+
 export interface Order {
   id: string;
   orderCode: string;
@@ -94,7 +134,21 @@ export interface Order {
   companyName: string;
   receiverName: string;
   receiverPhone: string;
-  receiverAddress: string;
+  receiverAddress: string; // автоматаар бүрдсэн бүтэн хаяг (хайлт/харуулахад)
+  // Хүргэлтийн бүс + бүтэцлэгдсэн хаягийн талбарууд
+  deliveryType?: DeliveryType;
+  cityDistrict?: string; // нийслэл: дүүрэг
+  cityKhoroo?: string; // нийслэл: хороо/баг
+  street?: string; // гудамж / хороолол / хотхон
+  building?: string; // байр
+  entrance?: string; // орц / тоот
+  entranceCode?: string; // орцны код
+  addressNote?: string; // хаягийн нэмэлт тайлбар
+  province?: string; // орон нутаг: аймаг
+  soum?: string; // орон нутаг: сум / дүүрэг
+  terminalName?: string; // хүлээн авах унаа / вокзал / терминал
+  location?: { lat: number; lng: number }; // газрын зураг дээрх marker
+  routeOrder?: number; // маршрут дахь дараалал (optimization)
   itemName: string;
   productId?: string;
   productName?: string;
@@ -108,6 +162,7 @@ export interface Order {
   driverId?: string;
   driverName?: string;
   driverPhone?: string; // denormalized — public tracking-д
+  autoAssigned?: boolean; // авто-dispatch-аар оноогдсон эсэх (badge)
   assignedAt?: number; // ms — жолооч оноосон
   pickedUpAt?: number; // ms — бараа авсан
   deliveredAt?: number; // ms — хүргэгдсэн
@@ -170,6 +225,41 @@ export interface Activity {
   createdAt: number; // ms
 }
 
+// Жолоочийн цалин тооцооны горим
+export type DriverSalaryMode = "fixed" | "per_delivery";
+
+// Жолоочийн сарын KPI (Firestore: driverKpi — эсвэл orders-аас динамик тооцоолно)
+export interface DriverKpi {
+  driverId: string;
+  driverName: string;
+  month: string; // YYYY-MM
+  totalAssigned: number;
+  totalDelivered: number;
+  totalFailed: number;
+  successRate: number; // 0..100
+  totalDeliveryIncome: number;
+  totalCodCollected: number;
+  codDifference: number;
+  baseSalary: number;
+  bonus: number;
+  calculatedSalary: number;
+}
+
+// Харилцагч байгууллагын сарын KPI (orders-аас динамик тооцоолно)
+export interface PartnerKpi {
+  companyId: string;
+  companyName: string;
+  month: string; // YYYY-MM
+  totalOrders: number;
+  deliveredOrders: number;
+  failedOrders: number;
+  cancelledOrders: number;
+  successRate: number; // 0..100
+  deliveryFeeTotal: number;
+  codTotal: number;
+  averageCodAmount: number;
+}
+
 // Системийн тохиргоо (Firestore: settings/general)
 export interface GeneralSettings {
   companyName: string;
@@ -183,6 +273,13 @@ export interface GeneralSettings {
   primaryColor?: string;
   codEnabled: boolean;
   trackingEnabled: boolean;
+  autoAssignEnabled: boolean; // шинэ захиалгад жолооч авто-оноох эсэх
+  // Жолоочийн цалин тооцоо
+  driverSalaryMode: DriverSalaryMode;
+  baseSalary?: number; // fixed — суурь цалин
+  perDeliveryAmount?: number; // per_delivery — нэг хүргэлтийн дүн
+  bonusThreshold?: number; // урамшуулал авах хүргэлтийн доод тоо
+  bonusAmount?: number; // урамшууллын дүн
   // SMS (нууц биш хэсэг — API key нь settings/sms admin-only doc-д тусдаа)
   smsEnabled: boolean;
   smsProvider: SmsProvider;
@@ -256,6 +353,36 @@ export const PAYMENT_TYPE_LABELS: Record<PaymentType, string> = {
   delivery_fee: "Хүргэлтийн төлбөр",
   cod_return: "COD буцаалт",
   adjustment: "Тохируулга",
+};
+
+// Жолоочийн өдрийн COD тушаалт / өдөр хаалт (Firestore: driverSettlements)
+export type DriverSettlementStatus = "open" | "submitted" | "approved";
+
+export interface DriverSettlement {
+  id: string;
+  driverId: string;
+  driverName: string;
+  date: number; // ms — өдрийн эхлэл
+  dateKey: string; // YYYY-MM-DD
+  totalOrders: number;
+  deliveredOrders: number;
+  codCollected: number; // нийт COD (delivered)
+  cashCollected: number; // бэлнээр цуглуулсан (codCollected===true)
+  handedAmount: number; // тушаасан дүн
+  differenceAmount: number; // codCollected - handedAmount
+  status: DriverSettlementStatus;
+  submittedAt?: number;
+  approvedAt?: number;
+  approvedBy?: string;
+  note?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export const DRIVER_SETTLEMENT_STATUS_LABELS: Record<DriverSettlementStatus, string> = {
+  open: "Нээлттэй",
+  submitted: "Илгээсэн",
+  approved: "Баталсан",
 };
 
 // Жолоочийн байршил (Firestore: driverLocations/{driverId})

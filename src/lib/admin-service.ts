@@ -1,5 +1,10 @@
 import { deleteApp, initializeApp } from "firebase/app";
-import { createUserWithEmailAndPassword, getAuth, signOut } from "firebase/auth";
+import {
+  createUserWithEmailAndPassword,
+  getAuth,
+  sendPasswordResetEmail,
+  signOut,
+} from "firebase/auth";
 import {
   collection,
   doc,
@@ -10,7 +15,7 @@ import {
   setDoc,
   updateDoc,
 } from "firebase/firestore";
-import { db, firebaseConfig } from "@/lib/firebase";
+import { auth, db, firebaseConfig } from "@/lib/firebase";
 import type { StaffRole, UserDoc } from "@/types";
 
 export interface NewStaffInput {
@@ -20,6 +25,7 @@ export interface NewStaffInput {
   password: string;
   role: StaffRole;
   companyId?: string;
+  driverId?: string;
   isActive: boolean;
 }
 
@@ -56,8 +62,10 @@ export async function createStaffUser(input: NewStaffInput): Promise<string> {
       phone: input.phone.trim(),
       role: input.role,
       ...(input.companyId?.trim() ? { companyId: input.companyId.trim() } : {}),
+      ...(input.driverId?.trim() ? { driverId: input.driverId.trim() } : {}),
       isActive: input.isActive,
       createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     });
 
     return uid;
@@ -78,4 +86,10 @@ export async function listStaff(): Promise<StaffListItem[]> {
 // Ажилтны идэвхтэй эсэхийг солих.
 export async function setStaffActive(uid: string, isActive: boolean): Promise<void> {
   await updateDoc(doc(db, "users", uid), { isActive });
+}
+
+// Нууц үг сэргээх имэйл илгээх (password reset flow — UI-д дараа холбоно).
+// Firebase Auth өөрөө reset линк бүхий имэйл илгээнэ.
+export async function sendStaffPasswordReset(email: string): Promise<void> {
+  await sendPasswordResetEmail(auth, email.trim());
 }

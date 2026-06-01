@@ -27,7 +27,7 @@ export default function PartnerOrderTable({ orders }: { orders: Order[] }) {
               className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60"
             >
               <td className="px-4 py-3 font-mono font-semibold">
-                <Link href={`/partner/orders/${o.id}`} className="text-brand hover:underline">
+                <Link href={`/partner/orders/detail?id=${o.id}`} className="text-brand hover:underline">
                   {o.orderCode}
                 </Link>
               </td>

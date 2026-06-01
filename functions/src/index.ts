@@ -2,6 +2,7 @@ import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import {
   onDocumentCreated,
   onDocumentUpdated,
+  onDocumentWritten,
 } from "firebase-functions/v2/firestore";
 import { getApps, initializeApp } from "firebase-admin/app";
 import { FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
@@ -190,6 +191,130 @@ async function sendAndLogSms(payload: {
   await doSendSms(config, payload);
 }
 
+// ── Auto-dispatch (жолооч авто-оноох) ────────────────────────
+
+interface DriverCandidate {
+  id: string;
+  name: string;
+  phone?: string;
+  serviceDistricts?: string[];
+  currentOrderCount?: number;
+  isActive?: boolean;
+}
+
+// Орон нутгийн хүргэлтийн терминал дүүрэг (зүүн→Баянзүрх, баруун→Баянгол).
+// Зүүн аймгийн хүргэлт Баянзүрх дүүргийн Тэнгэр ХТ-өөс, баруун аймгийнх
+// Баянгол дүүргийн Драгон терминалаас унаанд тавигдана.
+const EASTERN_PROVINCES = ["Дорнод", "Сүхбаатар", "Хэнтий"];
+const WESTERN_PROVINCES = ["Баян-Өлгий", "Ховд", "Увс", "Завхан", "Говь-Алтай"];
+
+function terminalDistrictForProvince(province?: string): string | undefined {
+  if (!province) return undefined;
+  if (EASTERN_PROVINCES.includes(province)) return "Баянзүрх";
+  if (WESTERN_PROVINCES.includes(province)) return "Баянгол";
+  return undefined;
+}
+
+// Хоёр цэгийн зай (км) — Haversine.
+function haversineKm(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number },
+): number {
+  const R = 6371;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const lat1 = (a.lat * Math.PI) / 180;
+  const lat2 = (b.lat * Math.PI) / 180;
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+// Жолоочийн идэвхтэй захиалгын тоог +/- (0-оос доош болохгүй).
+async function adjustDriverCount(driverId: string, delta: number): Promise<void> {
+  const ref = db.doc(`drivers/${driverId}`);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return;
+    const cur = (snap.data()?.currentOrderCount as number) ?? 0;
+    tx.update(ref, {
+      currentOrderCount: Math.max(0, cur + delta),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  });
+}
+
+/**
+ * autoAssignEnabled бол шинэ захиалгад хамгийн боломжит жолоочийг сонгож онооно.
+ * Сонголт: available + идэвхтэй → бүс тохирвол урьдална → хамгийн бага
+ * currentOrderCount → (city + байршилтай бол) хамгийн ойр.
+ * Зөвхөн захиалгын doc-ийг шинэчилнэ; count нэмэгдүүлэх + driver мэдэгдлийг
+ * onOrderUpdated хариуцна (давхар хийхгүй).
+ */
+async function autoAssignOrder(
+  orderId: string,
+  o: FirebaseFirestore.DocumentData,
+): Promise<void> {
+  const general = (await db.doc("settings/general").get()).data() || {};
+  if (general.autoAssignEnabled !== true) return;
+  if (o.driverId) return; // аль хэдийн оноогдсон
+  if (o.status && o.status !== "pending") return;
+
+  const snap = await db
+    .collection("drivers")
+    .where("currentStatus", "==", "available")
+    .get();
+  const candidates: DriverCandidate[] = snap.docs
+    .map((d) => ({ id: d.id, ...(d.data() as Omit<DriverCandidate, "id">) }))
+    .filter((d) => d.isActive !== false);
+  if (candidates.length === 0) return; // сул жолооч алга — pending хэвээр
+
+  // Зорилтот дүүрэг (city → захиалгын дүүрэг, province → бүсийн терминал дүүрэг).
+  const targetDistrict =
+    o.deliveryType === "province"
+      ? terminalDistrictForProvince(o.province)
+      : (o.cityDistrict as string | undefined);
+  const matched = targetDistrict
+    ? candidates.filter((c) => (c.serviceDistricts ?? []).includes(targetDistrict))
+    : [];
+  const pool = matched.length ? matched : candidates;
+
+  // Ойролцоо байдал (зөвхөн city + захиалгын байршилтай үед).
+  const locById: Record<string, { lat: number; lng: number }> = {};
+  if (o.location && o.deliveryType === "city") {
+    const locs = await Promise.all(
+      pool.map((c) => db.doc(`driverLocations/${c.id}`).get()),
+    );
+    locs.forEach((ls, i) => {
+      const d = ls.data();
+      if (ls.exists && d) locById[pool[i].id] = { lat: d.lat, lng: d.lng };
+    });
+  }
+  const dist = (c: DriverCandidate): number => {
+    const l = locById[c.id];
+    return o.location && l ? haversineKm(o.location, l) : Number.POSITIVE_INFINITY;
+  };
+
+  pool.sort((a, b) => {
+    const ca = a.currentOrderCount ?? 0;
+    const cb = b.currentOrderCount ?? 0;
+    if (ca !== cb) return ca - cb; // 1) хамгийн бага ачаалал
+    return dist(a) - dist(b); // 2) хамгийн ойр
+  });
+  const pick = pool[0];
+
+  await db.doc(`orders/${orderId}`).update({
+    driverId: pick.id,
+    driverName: pick.name,
+    driverPhone: pick.phone ?? "",
+    autoAssigned: true,
+    status: "assigned",
+    assignedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+}
+
 // ── Order triggers ───────────────────────────────────────────
 
 // Шинэ захиалга → admin-уудад мэдэгдэл + хүлээн авагчид SMS.
@@ -209,6 +334,14 @@ export const onOrderCreated = onDocumentCreated(
       phone: o.receiverPhone,
       message: `Таны ${o.orderCode} захиалга HurdExpress хүргэлтэд бүртгэгдлээ.`,
     });
+
+    // Авто-оноолт (settings.autoAssignEnabled бол). Захиалгыг шинэчлэх нь
+    // onOrderUpdated-г өдөөж, тэндээс жолоочид мэдэгдэл + count нэмэгдэнэ.
+    try {
+      await autoAssignOrder(event.params.orderId, o);
+    } catch (err) {
+      console.error("autoAssignOrder failed", err);
+    }
   },
 );
 
@@ -222,8 +355,12 @@ export const onOrderUpdated = onDocumentUpdated(
     const after = event.data?.after.data();
     if (!before || !after) return;
 
-    // Жолооч шинээр оноогдсон
+    // Жолооч шинээр оноогдсон (авто эсвэл гараар) / дахин оноогдсон
     if (after.driverId && before.driverId !== after.driverId) {
+      // Load balancing: шинэ жолоочид +1, хуучин жолоочоос -1.
+      await adjustDriverCount(after.driverId, 1);
+      if (before.driverId) await adjustDriverCount(before.driverId, -1);
+
       const users = await db
         .collection("users")
         .where("driverId", "==", after.driverId)
@@ -244,6 +381,17 @@ export const onOrderUpdated = onDocumentUpdated(
         phone: after.receiverPhone,
         message: `Таны ${after.orderCode} захиалга жолоочид оноогдлоо.`,
       });
+    }
+
+    // Захиалга дуусгавар болоход (delivered/failed/cancelled) жолоочийн
+    // идэвхтэй тоог -1 (load balancing-ийг чөлөөлнө).
+    const TERMINAL = ["delivered", "failed", "cancelled"];
+    if (
+      after.driverId &&
+      TERMINAL.includes(after.status) &&
+      !TERMINAL.includes(before.status)
+    ) {
+      await adjustDriverCount(after.driverId, -1);
     }
 
     // Хүргэгдсэн
@@ -289,6 +437,46 @@ export const onOrderUpdated = onDocumentUpdated(
         `${after.orderCode}: ${after.cancelReason || "Цуцлагдсан"}`,
         "order",
       );
+    }
+  },
+);
+
+// ── Driver settlement trigger (COD тушаалт / өдөр хаалт) ─────
+// Жолооч өдөр хаахад (submitted) → admin-уудад; admin батлахад (approved) →
+// тухайн жолоочид мэдэгдэл.
+export const onDriverSettlementWritten = onDocumentWritten(
+  "driverSettlements/{id}",
+  async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!after) return; // устгасан
+
+    // Жолооч өдөр хаалт илгээсэн
+    if (after.status === "submitted" && before?.status !== "submitted") {
+      const diff = (after.codCollected ?? 0) - (after.handedAmount ?? 0);
+      const diffNote = diff !== 0 ? ` (зөрүү ${diff.toLocaleString("mn-MN")}₮)` : "";
+      await notifyAdmins(
+        "Жолооч өдөр хаалаа",
+        `${after.driverName}: ${(after.handedAmount ?? 0).toLocaleString("mn-MN")}₮ тушаах хүсэлт${diffNote}`,
+        "system",
+      );
+    }
+
+    // Admin баталсан
+    if (after.status === "approved" && before?.status !== "approved") {
+      const users = await db
+        .collection("users")
+        .where("driverId", "==", after.driverId)
+        .limit(1)
+        .get();
+      if (!users.empty) {
+        await notifyUser(
+          users.docs[0].id,
+          "Тооцоо батлагдлаа",
+          `${after.dateKey} өдрийн тооцоо батлагдлаа.`,
+          "system",
+        );
+      }
     }
   },
 );

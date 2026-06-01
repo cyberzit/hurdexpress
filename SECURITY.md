@@ -47,32 +47,29 @@ users/{uid} {
 `orders` collection дээр **public read байхгүй**. Хэн ч нэвтрэлгүйгээр Firestore-руу
 шууд query хийж бүх захиалгыг харах боломжгүй.
 
-Оронд нь **Next.js API route** (`/api/track-order`) сервер талд Firebase Admin SDK
-ашиглан зөвхөн нэг захиалгыг `orderCode`-оор хайж, **хязгаарлагдмал safe талбар**
-буцаана:
+Оронд нь **`trackOrder` Cloud Function** (Firebase Functions, Admin SDK) сервер талд
+зөвхөн нэг захиалгыг `orderCode`-оор хайж, **хязгаарлагдмал safe талбар** буцаана.
+Static export тул Next.js API route байхгүй — client функц рүү шууд (CORS-той) `fetch` хийнэ.
 
 - ✅ Буцаана: `orderCode`, `status`, `companyName`, `receiverName`, `driverName`,
   `driverPhone`, `createdAt`, `deliveredAt`, мөн `receiverPhoneMasked` (сүүлийн 4 орон)
 - ❌ Буцаахгүй: `receiverPhone` бүтнээр, `receiverAddress`, COD дүн, дотоод id-ууд
 
-### Setup — service account
+### Setup
 
-1. Firebase Console → **Project Settings → Service accounts → Generate new private key**
-2. Татсан JSON-г **нэг мөр** болгож `.env.local`-д тавина:
-   ```
-   FIREBASE_SERVICE_ACCOUNT_KEY={"type":"service_account","project_id":"hurdexpress-49cd2",...}
-   ```
-3. Энэ түлхүүр нь `NEXT_PUBLIC_` угтваргүй тул зөвхөн серверт уншигдана. **Хэзээ ч
-   client bundle-д орохгүй, git-д commit хийхгүй** (`.gitignore` дотор `.env*` бий).
+`trackOrder` функц нь Functions runtime-ийн **default service account (ADC)**-ээр
+Firestore-д хандана — нэмэлт нууц түлхүүр шаардахгүй. Зөвхөн `npm run deploy:functions`.
+Функцийн URL-г өөрчлөх бол `NEXT_PUBLIC_TRACK_ORDER_URL` env-ээр (эс бол default
+us-central1 URL — [src/lib/trackUrl.ts](src/lib/trackUrl.ts)).
 
 ### Урсгал
 
 ```
-Browser (TrackingSearch) ──GET /api/track-order?code=HX123456──▶ Next.js server
-                                                                  │ Admin SDK (rules тойрно)
-                                                                  ▼
-                                                           orders (orderCode==)
-                         ◀──── зөвхөн safe талбар (JSON) ──────────┘
+Browser (TrackingSearch) ──GET trackOrder?code=HX123456──▶ Cloud Function
+                                                            │ Admin SDK (rules тойрно)
+                                                            ▼
+                                                     orders (orderCode==)
+                       ◀──── зөвхөн safe талбар (JSON, CORS) ───┘
 ```
 
 ## Notifications — production тэмдэглэл
@@ -166,7 +163,7 @@ Firebase Console → Firestore → **Rules → Playground**-д:
 
 | Файл | Өөрчлөлт |
 |---|---|
-| [TrackingSearch.tsx](src/components/tracking/TrackingSearch.tsx) | Client Firestore query → `/api/track-order` fetch |
+| [TrackingSearch.tsx](src/components/tracking/TrackingSearch.tsx) | Client Firestore query → `trackOrder` Cloud Function fetch |
 | [NotificationBell.tsx](src/components/notifications/NotificationBell.tsx) | Broadcast аудиенс хассан (зөвхөн өөрийн uid) |
 | [DriverStatusActions.tsx](src/components/driver/DriverStatusActions.tsx) | Partner/admin notification-г Cloud Function руу зөөхөөр тэмдэглэсэн |
 | [orders.ts](src/lib/firebase/orders.ts) | `getOrderByCode` — public-д ашиглахаа больсон (deprecated) |
@@ -176,5 +173,5 @@ Firebase Console → Firestore → **Rules → Playground**-д:
 - [ ] Notification fan-out-ыг **Cloud Function** (Firestore trigger) болгох
 - [ ] Legacy `shipments` collection + `/track` хуудсыг устгах эсвэл аюулгүй болгох
 - [ ] App Check идэвхжүүлж API/SDK-г бот-оос хамгаалах
-- [ ] `/api/track-order`-д rate limiting нэмэх (orderCode brute-force-оос сэргийлэх)
+- [ ] `trackOrder` функцэд rate limiting нэмэх (orderCode brute-force-оос сэргийлэх)
 - [ ] Storage rules-г идэвхжүүлэх үед хянах

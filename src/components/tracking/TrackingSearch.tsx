@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react";
 import TrackingTimeline from "@/components/tracking/TrackingTimeline";
 import { TRACKING_STATUS_LABELS } from "@/lib/tracking-status";
+import { trackOrderApi } from "@/lib/trackUrl";
 import { getSettings } from "@/lib/settings";
 import type { OrderStatus } from "@/types";
 
-// /api/track-order route-ийн буцаах хязгаарлагдмал DTO.
+// trackOrder Cloud Function-ийн буцаах хязгаарлагдмал DTO.
 interface TrackResult {
   orderCode: string;
   status: OrderStatus;
@@ -66,11 +67,14 @@ export default function TrackingSearch() {
       return;
     }
 
+    // Том/жижиг үсэг ялгахгүй — trim + uppercase болгож normalize хийнэ.
+    const normalizedCode = code.trim().toUpperCase();
+
     setLoading(true);
     setSearched(true);
     try {
-      // Public tracking нь Firestore-руу шууд хандахгүй — серверийн API ашиглана.
-      const res = await fetch(`/api/track-order?code=${encodeURIComponent(code.trim())}`);
+      // Public tracking — Cloud Function руу шууд (static export).
+      const res = await fetch(trackOrderApi(normalizedCode));
       if (res.status === 404) {
         setResult(null);
       } else if (!res.ok) {
@@ -128,7 +132,7 @@ export default function TrackingSearch() {
 
       {!loading && searched && !result && !error && (
         <p className="mt-5 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-          «{code.trim()}» дугаартай захиалга олдсонгүй.
+          «{code.trim().toUpperCase()}» дугаартай захиалга олдсонгүй.
         </p>
       )}
 

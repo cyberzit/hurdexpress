@@ -8,6 +8,11 @@ import { subscribeProductsByCompany } from "@/lib/firebase/products";
 import { addOrder, type OrderInput } from "@/lib/firebase/orders";
 import { logActivity } from "@/lib/firebase/activity";
 import { getSettings } from "@/lib/settings";
+import AddressForm, {
+  EMPTY_ADDRESS,
+  type AddressValue,
+} from "@/components/orders/AddressForm";
+import { buildReceiverAddress } from "@/lib/mongoliaLocations";
 import type { Product } from "@/types";
 
 const inputClass =
@@ -27,7 +32,7 @@ export default function PartnerOrderForm() {
   const [itemName, setItemName] = useState("");
   const [receiverName, setReceiverName] = useState("");
   const [receiverPhone, setReceiverPhone] = useState("");
-  const [receiverAddress, setReceiverAddress] = useState("");
+  const [address, setAddress] = useState<AddressValue>(EMPTY_ADDRESS);
   const [qty, setQty] = useState("1");
   const [codAmount, setCodAmount] = useState("0");
   const [deliveryPrice, setDeliveryPrice] = useState("6000");
@@ -84,7 +89,19 @@ export default function PartnerOrderForm() {
     if (!companyId) return setError("Байгууллага холбогдоогүй байна.");
     if (!receiverName.trim()) return setError("Хүлээн авагчийн нэр заавал бөглөнө.");
     if (!receiverPhone.trim()) return setError("Хүлээн авагчийн утас заавал бөглөнө.");
-    if (!receiverAddress.trim()) return setError("Хаяг заавал бөглөнө.");
+
+    // Хүргэлтийн бүсээс хамаарсан хаягийн шалгалт.
+    if (address.deliveryType === "city") {
+      if (!address.cityDistrict) return setError("Дүүрэг сонгоно уу.");
+      if (!address.cityKhoroo.trim()) return setError("Хороо / баг бөглөнө үү.");
+      if (!address.addressNote.trim())
+        return setError("Хаягийн нэмэлт тайлбар заавал бөглөнө.");
+    } else {
+      if (!address.province) return setError("Аймаг сонгоно уу.");
+      if (!address.soum.trim()) return setError("Сум / дүүрэг бөглөнө үү.");
+      if (!address.terminalName.trim())
+        return setError("Хүлээн авах унаа / терминал заавал бөглөнө.");
+    }
 
     const qtyNum = Number(qty);
     if (!qty.trim() || Number.isNaN(qtyNum) || qtyNum < 1) {
@@ -96,6 +113,8 @@ export default function PartnerOrderForm() {
     }
 
     const product = products.find((p) => p.id === productId);
+    const isCity = address.deliveryType === "city";
+    const receiverAddress = buildReceiverAddress(address);
 
     const payload: OrderInput = {
       companyId,
@@ -103,6 +122,19 @@ export default function PartnerOrderForm() {
       receiverName,
       receiverPhone,
       receiverAddress,
+      deliveryType: address.deliveryType,
+      // Зөвхөн сонгосон бүсэд хамаарах талбаруудыг дамжуулна.
+      cityDistrict: isCity ? address.cityDistrict : undefined,
+      cityKhoroo: isCity ? address.cityKhoroo : undefined,
+      street: isCity ? address.street : undefined,
+      building: isCity ? address.building : undefined,
+      entrance: isCity ? address.entrance : undefined,
+      entranceCode: isCity ? address.entranceCode : undefined,
+      province: isCity ? undefined : address.province,
+      soum: isCity ? undefined : address.soum,
+      terminalName: isCity ? undefined : address.terminalName,
+      addressNote: address.addressNote,
+      location: isCity ? address.location : undefined,
       itemName,
       productId: product?.id,
       productName: product?.name,
@@ -202,14 +234,9 @@ export default function PartnerOrderForm() {
         />
       </div>
 
-      <div>
-        <label className={labelClass}>Хаяг *</label>
-        <input
-          className={inputClass}
-          value={receiverAddress}
-          onChange={(e) => setReceiverAddress(e.target.value)}
-          disabled={busy}
-        />
+      {/* Хүргэлтийн бүс + бүтэцлэгдсэн хаяг */}
+      <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
+        <AddressForm value={address} onChange={setAddress} disabled={busy} />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">

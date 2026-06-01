@@ -17,10 +17,16 @@ const NAV: NavItem[] = [
   { label: "Бараа бүтээгдэхүүн", href: "/admin/products", icon: "🛒" },
   { label: "Жолооч нар", href: "/admin/drivers", icon: "🚚" },
   { label: "Байршил (live)", href: "/admin/live-map", icon: "🛰️" },
+  { label: "Маршрутууд", href: "/admin/routes", icon: "🗺️" },
   { label: "Тооцоо / нэхэмжлэл", href: "/admin/settlements", icon: "🧾" },
+  { label: "Жолоочийн тооцоо", href: "/admin/settlements/drivers", icon: "💵" },
+  { label: "Жолоочийн KPI", href: "/admin/kpi/drivers", icon: "📊" },
+  { label: "Харилцагчийн KPI", href: "/admin/kpi/partners", icon: "🏢" },
   { label: "Тайлан", href: "/admin/reports", icon: "📈" },
   { label: "SMS лог", href: "/admin/sms-logs", icon: "✉️" },
+  { label: "Хэрэглэгчид", href: "/admin/users", icon: "👤" },
   { label: "Тохиргоо", href: "/admin/settings", icon: "⚙️" },
+  // Test Flow — sidebar-аас нуусан. Route хэвээр (/admin/test-flow), зөвхөн URL-аар.
 ];
 
 export default function AdminSidebar({

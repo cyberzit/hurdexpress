@@ -6,6 +6,7 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
   updateDoc,
   where,
   type Unsubscribe,
@@ -22,6 +23,9 @@ export interface ProductInput {
   sku?: string;
   price: number;
   photoUrl?: string;
+  thumbnailUrl?: string;
+  imagePath?: string;
+  thumbnailPath?: string;
   description?: string;
   isActive: boolean;
 }
@@ -42,6 +46,9 @@ function mapProduct(id: string, data: Record<string, unknown>): Product {
     sku: data.sku as string | undefined,
     price: (data.price as number) ?? 0,
     photoUrl: data.photoUrl as string | undefined,
+    thumbnailUrl: data.thumbnailUrl as string | undefined,
+    imagePath: data.imagePath as string | undefined,
+    thumbnailPath: data.thumbnailPath as string | undefined,
     description: data.description as string | undefined,
     isActive: Boolean(data.isActive),
     createdAt: toMillis(data.createdAt),
@@ -59,8 +66,12 @@ function buildDoc(input: ProductInput): Record<string, unknown> {
     isActive: input.isActive,
   };
   if (input.sku?.trim()) out.sku = input.sku.trim();
-  if (input.photoUrl?.trim()) out.photoUrl = input.photoUrl.trim();
   if (input.description?.trim()) out.description = input.description.trim();
+  // Зургийн талбаруудыг үргэлж бичнэ (устгах үед "" болгож цэвэрлэхэд).
+  out.photoUrl = input.photoUrl?.trim() ?? "";
+  out.thumbnailUrl = input.thumbnailUrl?.trim() ?? "";
+  out.imagePath = input.imagePath?.trim() ?? "";
+  out.thumbnailPath = input.thumbnailPath?.trim() ?? "";
   return out;
 }
 
@@ -122,6 +133,23 @@ export async function addProduct(input: ProductInput): Promise<string> {
     updatedAt: serverTimestamp(),
   });
   return ref.id;
+}
+
+// Урьдчилан id үүсгэх — Storage зам (products/{companyId}/{productId})-д хэрэгтэй.
+export function generateProductId(): string {
+  return doc(collection(db, COLLECTION)).id;
+}
+
+// Тодорхой id-тай бараа үүсгэх (зургийг эхэлж тэр id-аар upload хийсний дараа).
+export async function createProductWithId(
+  id: string,
+  input: ProductInput,
+): Promise<void> {
+  await setDoc(doc(db, COLLECTION, id), {
+    ...buildDoc(input),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
 }
 
 export async function updateProduct(id: string, input: ProductInput): Promise<void> {

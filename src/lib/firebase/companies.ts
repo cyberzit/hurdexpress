@@ -24,6 +24,8 @@ export interface CompanyInput {
   contractPrice: number;
   contactPerson?: string;
   note?: string;
+  managerName?: string;
+  managerEmail?: string;
   isActive: boolean;
 }
 
@@ -44,6 +46,8 @@ function mapCompany(id: string, data: Record<string, unknown>): Company {
     contractPrice: (data.contractPrice as number) ?? 0,
     contactPerson: data.contactPerson as string | undefined,
     note: data.note as string | undefined,
+    managerName: data.managerName as string | undefined,
+    managerEmail: data.managerEmail as string | undefined,
     isActive: Boolean(data.isActive),
     createdAt: toMillis(data.createdAt),
     updatedAt: toMillis(data.updatedAt),
@@ -62,6 +66,8 @@ function buildDoc(input: CompanyInput): Record<string, unknown> {
   if (input.email?.trim()) out.email = input.email.trim();
   if (input.contactPerson?.trim()) out.contactPerson = input.contactPerson.trim();
   if (input.note?.trim()) out.note = input.note.trim();
+  if (input.managerName?.trim()) out.managerName = input.managerName.trim();
+  if (input.managerEmail?.trim()) out.managerEmail = input.managerEmail.trim();
   return out;
 }
 
@@ -91,6 +97,53 @@ export async function addCompany(input: CompanyInput): Promise<string> {
     updatedAt: serverTimestamp(),
   });
   return ref.id;
+}
+
+// Партнер менежерийн нэвтрэх мэдээлэл.
+export interface PartnerManagerInput {
+  name: string;
+  email: string;
+  phone: string;
+  password: string;
+}
+
+export interface CreatedCompanyPartner {
+  companyId: string;
+  uid: string;
+  email: string;
+}
+
+/**
+ * Шинэ харилцагч + партнер хэрэглэгчийг хамт үүсгэнэ:
+ *  1) company document (managerName/managerEmail-тэй)
+ *  2) Firebase Auth хэрэглэгч + users/{uid} (role:"partner", companyId)
+ * Хэрэв хэрэглэгч үүсгэхэд алдвал company үлдэнэ — партнерийг дараа нь
+ * /admin/users-аас тухайн companyId-аар нэмж болно.
+ */
+export async function createCompanyWithPartner(
+  input: CompanyInput,
+  manager: PartnerManagerInput,
+): Promise<CreatedCompanyPartner> {
+  // Динамик import — admin-service зөвхөн энд хэрэгтэй (Auth secondary app).
+  const { createStaffUser } = await import("@/lib/admin-service");
+
+  const companyId = await addCompany({
+    ...input,
+    managerName: manager.name,
+    managerEmail: manager.email,
+  });
+
+  const uid = await createStaffUser({
+    name: manager.name,
+    email: manager.email,
+    phone: manager.phone,
+    password: manager.password,
+    role: "partner",
+    companyId,
+    isActive: true,
+  });
+
+  return { companyId, uid, email: manager.email.trim() };
 }
 
 export async function updateCompany(id: string, input: CompanyInput): Promise<void> {

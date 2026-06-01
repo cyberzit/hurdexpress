@@ -58,7 +58,7 @@ export default function AdminOrderTable({ orders, onAssign, onStatusChange }: Pr
                 className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60"
               >
                 <td className="px-4 py-3 font-mono font-semibold">
-                  <Link href={`/admin/orders/${o.id}`} className="text-brand hover:underline">
+                  <Link href={`/admin/orders/detail?id=${o.id}`} className="text-brand hover:underline">
                     {o.orderCode}
                   </Link>
                 </td>
@@ -72,7 +72,17 @@ export default function AdminOrderTable({ orders, onAssign, onStatusChange }: Pr
                 <td className="px-4 py-3 text-slate-600">
                   {o.codAmount.toLocaleString("mn-MN")}₮
                 </td>
-                <td className="px-4 py-3 text-slate-600">{o.driverName || "—"}</td>
+                <td className="px-4 py-3 text-slate-600">
+                  {o.driverName || "—"}
+                  {o.autoAssigned && o.driverName && (
+                    <span
+                      title="Авто-оноолтоор оноогдсон"
+                      className="ml-1.5 rounded-full bg-brand/10 px-1.5 py-0.5 text-[10px] font-semibold text-brand-dark"
+                    >
+                      🤖 Авто
+                    </span>
+                  )}
+                </td>
                 <td className="px-4 py-3">
                   <StatusBadge status={o.status} />
                 </td>
@@ -86,7 +96,7 @@ export default function AdminOrderTable({ orders, onAssign, onStatusChange }: Pr
                       Жолооч
                     </button>
                     <Link
-                      href={`/admin/orders/${o.id}/print`}
+                      href={`/admin/orders/print?id=${o.id}`}
                       title="QR / Хэвлэх"
                       className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs transition hover:bg-slate-50"
                     >
@@ -110,7 +120,7 @@ export default function AdminOrderTable({ orders, onAssign, onStatusChange }: Pr
             <div className="flex items-start justify-between gap-2">
               <div>
                 <Link
-                  href={`/admin/orders/${o.id}`}
+                  href={`/admin/orders/detail?id=${o.id}`}
                   className="font-mono font-semibold text-brand hover:underline"
                 >
                   {o.orderCode}

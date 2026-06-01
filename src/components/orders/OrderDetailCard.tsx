@@ -1,7 +1,7 @@
 import StatusBadge from "@/components/admin/StatusBadge";
 import Card from "@/components/ui/Card";
 import { formatCurrency } from "@/lib/format";
-import type { Order } from "@/types";
+import { DELIVERY_TYPE_LABELS, type Order } from "@/types";
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -12,10 +12,20 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
+// Утгатай үед л мөр харуулна (бүтэцлэгдсэн хаягт).
+function OptRow({ label, value }: { label: string; value?: string }) {
+  if (!value) return null;
+  return <Row label={label} value={value} />;
+}
+
 // Захиалгын бүх мэдээллийг харуулах дахин ашиглах карт (admin/partner/driver).
 export default function OrderDetailCard({ order }: { order: Order }) {
   const item = order.productName || order.itemName || "—";
-  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.receiverAddress)}`;
+  const mapsUrl = order.location
+    ? `https://www.google.com/maps?q=${order.location.lat},${order.location.lng}`
+    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.receiverAddress)}`;
+  const isCity = order.deliveryType === "city";
+  const isProvince = order.deliveryType === "province";
 
   return (
     <div className="space-y-3">
@@ -46,6 +56,49 @@ export default function OrderDetailCard({ order }: { order: Order }) {
         </a>
       </Card>
 
+      {/* Хүргэлтийн бүс + бүтэцлэгдсэн хаяг (deliveryType-тай захиалгад) */}
+      {order.deliveryType && (
+        <Card>
+          <div className="flex items-center justify-between">
+            <p className="text-xs uppercase tracking-wide text-slate-400">Хүргэх хаяг</p>
+            <span
+              className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                isProvince ? "bg-amber-50 text-amber-700" : "bg-blue-50 text-blue-700"
+              }`}
+            >
+              {DELIVERY_TYPE_LABELS[order.deliveryType]}
+            </span>
+          </div>
+
+          <div className="mt-3 space-y-2">
+            {isCity && (
+              <>
+                <OptRow label="Дүүрэг" value={order.cityDistrict} />
+                <OptRow label="Хороо / баг" value={order.cityKhoroo} />
+                <OptRow label="Гудамж / хороолол" value={order.street} />
+                <OptRow label="Байр" value={order.building} />
+                <OptRow label="Орц / тоот" value={order.entrance} />
+                <OptRow label="Орцны код" value={order.entranceCode} />
+              </>
+            )}
+            {isProvince && (
+              <>
+                <OptRow label="Аймаг" value={order.province} />
+                <OptRow label="Сум / дүүрэг" value={order.soum} />
+                <OptRow label="Унаа / терминал" value={order.terminalName} />
+              </>
+            )}
+            <OptRow label="Нэмэлт тайлбар" value={order.addressNote} />
+          </div>
+
+          {isProvince && (
+            <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              📦 Орон нутгийн унаанд тавьж хүргүүлнэ.
+            </p>
+          )}
+        </Card>
+      )}
+
       {/* Бараа + дүн */}
       <Card>
         <Row label="Бараа" value={item} />
@@ -72,7 +125,14 @@ export default function OrderDetailCard({ order }: { order: Order }) {
 
       {/* Жолооч */}
       <Card>
-        <p className="text-xs uppercase tracking-wide text-slate-400">Жолооч</p>
+        <div className="flex items-center justify-between">
+          <p className="text-xs uppercase tracking-wide text-slate-400">Жолооч</p>
+          {order.autoAssigned && order.driverName && (
+            <span className="rounded-full bg-brand/10 px-2.5 py-1 text-xs font-semibold text-brand-dark">
+              🤖 Авто оноосон
+            </span>
+          )}
+        </div>
         {order.driverName ? (
           <>
             <p className="mt-1 font-semibold text-navy">{order.driverName}</p>

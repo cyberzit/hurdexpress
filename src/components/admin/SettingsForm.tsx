@@ -9,7 +9,7 @@ import {
   subscribeSettings,
   type SettingsInput,
 } from "@/lib/settings";
-import type { SmsProvider } from "@/types";
+import type { DriverSalaryMode, SmsProvider } from "@/types";
 
 const inputClass =
   "w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-navy outline-none transition focus:border-brand focus:bg-white focus:ring-2 focus:ring-brand/20";
@@ -47,6 +47,12 @@ export default function SettingsForm() {
               primaryColor: settings.primaryColor ?? "#f97316",
               codEnabled: settings.codEnabled,
               trackingEnabled: settings.trackingEnabled,
+              autoAssignEnabled: settings.autoAssignEnabled,
+              driverSalaryMode: settings.driverSalaryMode,
+              baseSalary: settings.baseSalary ?? 0,
+              perDeliveryAmount: settings.perDeliveryAmount ?? 0,
+              bonusThreshold: settings.bonusThreshold ?? 0,
+              bonusAmount: settings.bonusAmount ?? 0,
               smsEnabled: settings.smsEnabled,
               smsProvider: settings.smsProvider,
               smsApiUrl: settings.smsApiUrl ?? "",
@@ -254,6 +260,106 @@ export default function SettingsForm() {
             />
             <span className="text-sm text-navy">Төлөв шалгах (tracking) идэвхтэй</span>
           </label>
+        </div>
+
+        {/* Auto-dispatch */}
+        <div className="rounded-xl border border-slate-200 p-4">
+          <label className="flex cursor-pointer items-start gap-2.5">
+            <input
+              type="checkbox"
+              checked={form.autoAssignEnabled}
+              onChange={(e) => update("autoAssignEnabled", e.target.checked)}
+              disabled={saving}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand/30"
+            />
+            <span>
+              <span className="text-sm font-medium text-navy">
+                🤖 Авто-оноолт (auto dispatch) идэвхтэй
+              </span>
+              <span className="mt-0.5 block text-xs text-slate-400">
+                Шинэ захиалга орж ирэхэд хамгийн боломжит жолоочид автоматаар оноогдоно.
+                Admin хүссэн үедээ гараар дахин оноож (override) болно.
+              </span>
+            </span>
+          </label>
+        </div>
+
+        {/* Жолоочийн цалин */}
+        <div className="space-y-4 rounded-xl border border-slate-200 p-4">
+          <h3 className="text-sm font-bold text-navy">💵 Жолоочийн цалин</h3>
+
+          <div>
+            <label className={labelClass}>Тооцооны горим</label>
+            <select
+              className={inputClass}
+              value={form.driverSalaryMode}
+              onChange={(e) => update("driverSalaryMode", e.target.value as DriverSalaryMode)}
+              disabled={saving}
+            >
+              <option value="per_delivery">Хүргэлт тутамд</option>
+              <option value="fixed">Тогтмол (суурь) цалин</option>
+            </select>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            {form.driverSalaryMode === "fixed" ? (
+              <div>
+                <label className={labelClass}>Суурь цалин (₮)</label>
+                <input
+                  className={inputClass}
+                  type="number"
+                  min={0}
+                  step={1000}
+                  value={form.baseSalary ?? 0}
+                  onChange={(e) => update("baseSalary", Number(e.target.value))}
+                  disabled={saving}
+                />
+              </div>
+            ) : (
+              <div>
+                <label className={labelClass}>Нэг хүргэлтийн дүн (₮)</label>
+                <input
+                  className={inputClass}
+                  type="number"
+                  min={0}
+                  step={100}
+                  value={form.perDeliveryAmount ?? 0}
+                  onChange={(e) => update("perDeliveryAmount", Number(e.target.value))}
+                  disabled={saving}
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className={labelClass}>Bonus авах хүргэлтийн доод тоо</label>
+              <input
+                className={inputClass}
+                type="number"
+                min={0}
+                value={form.bonusThreshold ?? 0}
+                onChange={(e) => update("bonusThreshold", Number(e.target.value))}
+                disabled={saving}
+                placeholder="0 = bonus байхгүй"
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Bonus дүн (₮)</label>
+              <input
+                className={inputClass}
+                type="number"
+                min={0}
+                step={1000}
+                value={form.bonusAmount ?? 0}
+                onChange={(e) => update("bonusAmount", Number(e.target.value))}
+                disabled={saving}
+              />
+            </div>
+          </div>
+          <p className="text-xs text-slate-400">
+            Хүргэлтийн тоо bonus-ийн доод тооноос хүрвэл цалин дээр bonus нэмэгдэнэ.
+          </p>
         </div>
 
         {/* SMS notification */}

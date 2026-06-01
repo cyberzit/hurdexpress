@@ -1,5 +1,8 @@
 import type { MetadataRoute } from "next";
 
+// Static export — manifest-г build үед нэг удаа гаргана.
+export const dynamic = "force-static";
+
 // PWA manifest — /manifest.webmanifest дээр serve хийгдэнэ.
 export default function manifest(): MetadataRoute.Manifest {
   return {

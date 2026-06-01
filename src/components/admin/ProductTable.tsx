@@ -8,12 +8,34 @@ interface Props {
   onToggleActive: (product: Product) => void;
 }
 
+// Барааны жижиг зураг (lazy) — байхгүй бол placeholder.
+function ProductThumb({ product }: { product: Product }) {
+  const url = product.thumbnailUrl || product.photoUrl;
+  if (!url) {
+    return (
+      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-300">
+        🛒
+      </div>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={url}
+      alt={product.name}
+      loading="lazy"
+      className="h-10 w-10 rounded-lg object-cover"
+    />
+  );
+}
+
 export default function ProductTable({ products, onEdit, onToggleActive }: Props) {
   return (
     <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
       <table className="w-full min-w-[720px] text-left text-sm">
         <thead>
           <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-400">
+            <th className="px-4 py-3 font-medium">Зураг</th>
             <th className="px-4 py-3 font-medium">Байгууллага</th>
             <th className="px-4 py-3 font-medium">Барааны нэр</th>
             <th className="px-4 py-3 font-medium">SKU</th>
@@ -28,6 +50,9 @@ export default function ProductTable({ products, onEdit, onToggleActive }: Props
               key={p.id}
               className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60"
             >
+              <td className="px-4 py-3">
+                <ProductThumb product={p} />
+              </td>
               <td className="px-4 py-3 text-slate-600">{p.companyName || "—"}</td>
               <td className="px-4 py-3 font-medium text-navy">{p.name}</td>
               <td className="px-4 py-3 text-slate-600">{p.sku || "—"}</td>

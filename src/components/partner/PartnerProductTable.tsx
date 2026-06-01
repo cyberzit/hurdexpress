@@ -10,6 +10,28 @@ interface Props {
   onToggleActive: (product: Product) => void;
 }
 
+function ProductThumb({ product, className = "h-10 w-10" }: { product: Product; className?: string }) {
+  const url = product.thumbnailUrl || product.photoUrl;
+  if (!url) {
+    return (
+      <div
+        className={`${className} flex items-center justify-center rounded-lg bg-slate-100 text-slate-300`}
+      >
+        🛒
+      </div>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={url}
+      alt={product.name}
+      loading="lazy"
+      className={`${className} rounded-lg object-cover`}
+    />
+  );
+}
+
 function ActiveBtn({ product, onToggleActive }: { product: Product; onToggleActive: Props["onToggleActive"] }) {
   return (
     <button
@@ -33,6 +55,7 @@ export default function PartnerProductTable({ products, onEdit, onToggleActive }
         <table className="w-full min-w-[600px] text-left text-sm">
           <thead>
             <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-400">
+              <th className="px-4 py-3 font-medium">Зураг</th>
               <th className="px-4 py-3 font-medium">Нэр</th>
               <th className="px-4 py-3 font-medium">SKU</th>
               <th className="px-4 py-3 font-medium">Үнэ</th>
@@ -43,6 +66,9 @@ export default function PartnerProductTable({ products, onEdit, onToggleActive }
           <tbody>
             {products.map((p) => (
               <tr key={p.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60">
+                <td className="px-4 py-3">
+                  <ProductThumb product={p} />
+                </td>
                 <td className="px-4 py-3 font-medium text-navy">{p.name}</td>
                 <td className="px-4 py-3 text-slate-600">{p.sku || "—"}</td>
                 <td className="px-4 py-3 text-slate-600">{formatCurrency(p.price)}</td>
@@ -65,9 +91,12 @@ export default function PartnerProductTable({ products, onEdit, onToggleActive }
         {products.map((p) => (
           <div key={p.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="font-medium text-navy">{p.name}</p>
-                <p className="text-xs text-slate-400">{p.sku || "—"}</p>
+              <div className="flex min-w-0 items-center gap-3">
+                <ProductThumb product={p} className="h-12 w-12 shrink-0" />
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-navy">{p.name}</p>
+                  <p className="text-xs text-slate-400">{p.sku || "—"}</p>
+                </div>
               </div>
               <ActiveBtn product={p} onToggleActive={onToggleActive} />
             </div>

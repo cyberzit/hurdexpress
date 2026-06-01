@@ -2,10 +2,13 @@
 
 import { useState } from "react";
 import {
-  addProduct,
+  createProductWithId,
+  generateProductId,
   updateProduct,
   type ProductInput,
 } from "@/lib/firebase/products";
+import { deleteProductImage, uploadProductImage } from "@/lib/imageUpload";
+import ImageUpload, { type ImageUploadState } from "@/components/ui/ImageUpload";
 import type { Company, Product } from "@/types";
 
 interface Props {
@@ -26,9 +29,10 @@ export default function ProductForm({ initial, companies, onClose }: Props) {
   const [name, setName] = useState(initial?.name ?? "");
   const [sku, setSku] = useState(initial?.sku ?? "");
   const [price, setPrice] = useState(initial ? String(initial.price) : "");
-  const [photoUrl, setPhotoUrl] = useState(initial?.photoUrl ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [isActive, setIsActive] = useState(initial?.isActive ?? true);
+  const [image, setImage] = useState<ImageUploadState>({ file: null, cleared: false });
+  const [progress, setProgress] = useState<number | null>(null);
 
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -57,28 +61,52 @@ export default function ProductForm({ initial, companies, onClose }: Props) {
     const companyName =
       options.find((c) => c.id === companyId)?.name ?? initial?.companyName ?? "";
 
-    const payload: ProductInput = {
+    const base = {
       companyId,
       companyName,
       name,
       sku,
       price: priceNum,
-      photoUrl,
       description,
       isActive,
     };
 
     setBusy(true);
     try {
+      const productId = isEdit && initial ? initial.id : generateProductId();
+
+      // Зургийг шийдвэрлэх: шинэ upload / устгах / хэвээр.
+      let img = {
+        photoUrl: initial?.photoUrl ?? "",
+        thumbnailUrl: initial?.thumbnailUrl ?? "",
+        imagePath: initial?.imagePath ?? "",
+        thumbnailPath: initial?.thumbnailPath ?? "",
+      };
+      if (image.file) {
+        setProgress(0);
+        img = await uploadProductImage(companyId, productId, image.file, setProgress);
+      } else if (image.cleared) {
+        if (initial?.imagePath) {
+          await deleteProductImage({
+            imagePath: initial.imagePath,
+            thumbnailPath: initial.thumbnailPath,
+          });
+        }
+        img = { photoUrl: "", thumbnailUrl: "", imagePath: "", thumbnailPath: "" };
+      }
+
+      const payload: ProductInput = { ...base, ...img };
       if (isEdit && initial) {
         await updateProduct(initial.id, payload);
       } else {
-        await addProduct(payload);
+        await createProductWithId(productId, payload);
       }
       onClose();
-    } catch {
-      setError("Хадгалахад алдаа гарлаа. Дахин оролдоно уу.");
-    } finally {
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Хадгалахад алдаа гарлаа. Дахин оролдоно уу.",
+      );
+      setProgress(null);
       setBusy(false);
     }
   }
@@ -160,14 +188,15 @@ export default function ProductForm({ initial, companies, onClose }: Props) {
           </div>
 
           <div>
-            <label className={labelClass}>Зураг URL</label>
-            <input
-              className={inputClass}
-              value={photoUrl}
-              onChange={(e) => setPhotoUrl(e.target.value)}
-              placeholder="https://…"
-              disabled={busy}
-            />
+            <label className={labelClass}>Барааны зураг</label>
+            <div className="mt-1.5">
+              <ImageUpload
+                existingUrl={initial?.photoUrl}
+                onChange={setImage}
+                disabled={busy}
+                progress={progress}
+              />
+            </div>
           </div>
 
           <div>

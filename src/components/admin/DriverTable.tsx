@@ -19,16 +19,46 @@ interface Props {
   onToggleActive: (driver: Driver) => void;
 }
 
+// Үйлчлэх дүүргүүд — эхний 2-г chip-ээр, илүүг "+N".
+function ServiceDistricts({ districts }: { districts?: string[] }) {
+  const list = districts ?? [];
+  if (list.length === 0) return <span className="text-xs text-slate-400">—</span>;
+  const shown = list.slice(0, 2);
+  const rest = list.length - shown.length;
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {shown.map((d) => (
+        <span
+          key={d}
+          className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600"
+        >
+          {d}
+        </span>
+      ))}
+      {rest > 0 && (
+        <span
+          title={list.join(", ")}
+          className="rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-semibold text-brand-dark"
+        >
+          +{rest}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export default function DriverTable({ drivers, onEdit, onToggleActive }: Props) {
   return (
     <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <table className="w-full min-w-[760px] text-left text-sm">
+      <table className="w-full min-w-[860px] text-left text-sm">
         <thead>
           <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-400">
             <th className="px-4 py-3 font-medium">Нэр</th>
             <th className="px-4 py-3 font-medium">Утас</th>
             <th className="px-4 py-3 font-medium">Тээвэр</th>
             <th className="px-4 py-3 font-medium">Дугаар</th>
+            <th className="px-4 py-3 font-medium">Үйлчлэх бүс</th>
+            <th className="px-4 py-3 font-medium">Нэвтрэх</th>
             <th className="px-4 py-3 font-medium">Төлөв</th>
             <th className="px-4 py-3 font-medium">Идэвх</th>
             <th className="px-4 py-3 text-right font-medium">Үйлдэл</th>
@@ -46,6 +76,20 @@ export default function DriverTable({ drivers, onEdit, onToggleActive }: Props) 
                 {VEHICLE_TYPE_LABELS[d.vehicleType]}
               </td>
               <td className="px-4 py-3 text-slate-600">{d.plateNumber || "—"}</td>
+              <td className="px-4 py-3">
+                <ServiceDistricts districts={d.serviceDistricts} />
+              </td>
+              <td className="px-4 py-3">
+                {d.loginEmail ? (
+                  <span className="text-xs text-slate-500" title={d.loginEmail}>
+                    🔑 {d.loginEmail}
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-500">
+                    Login алга
+                  </span>
+                )}
+              </td>
               <td className="px-4 py-3">
                 <span
                   className={`rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_STYLES[d.currentStatus]}`}

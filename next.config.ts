@@ -1,8 +1,10 @@
 import type { NextConfig } from "next";
 
+// Firebase Hosting static export. SSR/API байхгүй — бүх дата client Firebase SDK-аар.
 const nextConfig: NextConfig = {
-  // firebase-admin нь Node-only — server дээр bundle хийхгүй гадаад package болгоно.
-  serverExternalPackages: ["firebase-admin"],
+  output: "export",
+  images: { unoptimized: true },
+  trailingSlash: true,
 };
 
 export default nextConfig;

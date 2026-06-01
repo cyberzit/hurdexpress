@@ -44,7 +44,7 @@ export default function DriverOrderCard({ order }: { order: Order }) {
       </div>
 
       <Link
-        href={`/driver/orders/${order.id}`}
+        href={`/driver/orders/detail?id=${order.id}`}
         className="mt-4 block rounded-xl bg-navy py-3 text-center text-sm font-semibold text-white transition hover:bg-navy-light"
       >
         Дэлгэрэнгүй

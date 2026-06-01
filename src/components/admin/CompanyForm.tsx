@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import {
-  addCompany,
+  createCompanyWithPartner,
   updateCompany,
   type CompanyInput,
 } from "@/lib/firebase/companies";
+import { mapAuthError } from "@/lib/auth-service";
 import type { Company } from "@/types";
 
 interface Props {
@@ -32,8 +33,17 @@ export default function CompanyForm({ initial, onClose }: Props) {
   const [note, setNote] = useState(initial?.note ?? "");
   const [isActive, setIsActive] = useState(initial?.isActive ?? true);
 
+  // Партнер менежер (зөвхөн шинээр үүсгэх үед).
+  const [managerName, setManagerName] = useState("");
+  const [managerEmail, setManagerEmail] = useState("");
+  const [managerPhone, setManagerPhone] = useState("");
+  const [password, setPassword] = useState("");
+
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // Амжилттай үүссэн партнерийн нэвтрэх мэдээлэл (success modal).
+  const [created, setCreated] = useState<{ email: string; password: string } | null>(null);
+  const [showPw, setShowPw] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -57,19 +67,97 @@ export default function CompanyForm({ initial, onClose }: Props) {
       isActive,
     };
 
+    // Шинээр үүсгэх үед — партнер менежерийн талбар шалгана.
+    if (!isEdit) {
+      if (!managerName.trim()) return setError("Менежерийн нэр заавал бөглөнө.");
+      if (!managerEmail.trim()) return setError("Менежерийн имэйл заавал бөглөнө.");
+      if (!managerPhone.trim()) return setError("Менежерийн утас заавал бөглөнө.");
+      if (password.length < 6) return setError("Нууц үг хамгийн багадаа 6 тэмдэгт.");
+    }
+
     setBusy(true);
     try {
       if (isEdit && initial) {
         await updateCompany(initial.id, payload);
+        onClose();
       } else {
-        await addCompany(payload);
+        await createCompanyWithPartner(payload, {
+          name: managerName,
+          email: managerEmail,
+          phone: managerPhone,
+          password,
+        });
+        // Form-ыг хаахгүй — нэвтрэх мэдээллийг success modal-аар харуулна.
+        setCreated({ email: managerEmail.trim(), password });
       }
-      onClose();
-    } catch {
-      setError("Хадгалахад алдаа гарлаа. Дахин оролдоно уу.");
+    } catch (err) {
+      setError(mapAuthError(err));
     } finally {
       setBusy(false);
     }
+  }
+
+  // ── Success modal — партнерийн нэвтрэх мэдээлэл ──
+  if (created) {
+    const credentialText = `Имэйл: ${created.email}\nНууц үг: ${created.password}`;
+    return (
+      <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+        <div className="w-full max-w-md rounded-t-2xl bg-white p-6 shadow-xl sm:rounded-2xl">
+          <div className="text-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-2xl">
+              ✓
+            </div>
+            <h2 className="mt-3 text-lg font-bold text-navy">Харилцагч үүсгэгдлээ</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              «{name}» болон партнер хэрэглэгч амжилттай бүртгэгдлээ.
+            </p>
+          </div>
+
+          <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Нэвтрэх мэдээлэл
+            </p>
+            <div className="mt-2 space-y-1.5 text-sm">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-slate-500">Имэйл</span>
+                <span className="font-mono font-medium text-navy">{created.email}</span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-slate-500">Нууц үг</span>
+                <span className="font-mono font-medium text-navy">
+                  {showPw ? created.password : "•".repeat(created.password.length)}
+                </span>
+              </div>
+            </div>
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={() => setShowPw((v) => !v)}
+                className="flex-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-navy transition hover:bg-white"
+              >
+                {showPw ? "Нуух" : "Харах"}
+              </button>
+              <button
+                onClick={() => navigator.clipboard?.writeText(credentialText).catch(() => {})}
+                className="flex-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-navy transition hover:bg-white"
+              >
+                Хуулах
+              </button>
+            </div>
+          </div>
+
+          <p className="mt-3 text-xs text-slate-400">
+            ⚠️ Энэ мэдээллийг харилцагчид дамжуулна уу. Нууц үг дахин харагдахгүй.
+          </p>
+
+          <button
+            onClick={onClose}
+            className="mt-4 w-full rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-dark"
+          >
+            Хаах
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -174,6 +262,71 @@ export default function CompanyForm({ initial, onClose }: Props) {
             />
           </div>
 
+          {/* Партнер хэрэглэгч — зөвхөн шинээр үүсгэх үед */}
+          {!isEdit ? (
+            <div className="space-y-4 rounded-xl border border-brand/20 bg-brand/5 p-4">
+              <p className="text-sm font-bold text-navy">
+                👤 Партнер хэрэглэгч (нэвтрэх эрх)
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className={labelClass}>Менежерийн нэр *</label>
+                  <input
+                    className={inputClass}
+                    value={managerName}
+                    onChange={(e) => setManagerName(e.target.value)}
+                    disabled={busy}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Менежерийн утас *</label>
+                  <input
+                    className={inputClass}
+                    value={managerPhone}
+                    onChange={(e) => setManagerPhone(e.target.value)}
+                    disabled={busy}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className={labelClass}>Имэйл (нэвтрэх) *</label>
+                <input
+                  className={inputClass}
+                  type="email"
+                  value={managerEmail}
+                  onChange={(e) => setManagerEmail(e.target.value)}
+                  placeholder="partner@company.mn"
+                  disabled={busy}
+                  autoComplete="off"
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Нууц үг (6+ тэмдэгт) *</label>
+                <input
+                  className={inputClass}
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={busy}
+                  autoComplete="new-password"
+                />
+              </div>
+            </div>
+          ) : (
+            (initial?.managerEmail || initial?.managerName) && (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Партнер хэрэглэгч
+                </p>
+                <p className="mt-1 text-navy">{initial?.managerName}</p>
+                <p className="font-mono text-xs text-slate-500">{initial?.managerEmail}</p>
+                <p className="mt-1 text-xs text-slate-400">
+                  Нэвтрэх эрхийг «Хэрэглэгчид» хэсгээс удирдана. Нууц үг энд харагдахгүй.
+                </p>
+              </div>
+            )
+          )}
+
           <label className="flex cursor-pointer items-center gap-2.5">
             <input
               type="checkbox"
@@ -199,7 +352,7 @@ export default function CompanyForm({ initial, onClose }: Props) {
               disabled={busy}
               className="flex-1 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-dark disabled:opacity-60"
             >
-              {busy ? "Хадгалж байна…" : isEdit ? "Хадгалах" : "Нэмэх"}
+              {busy ? "Хадгалж байна…" : isEdit ? "Хадгалах" : "Үүсгэх"}
             </button>
           </div>
         </form>

@@ -4,11 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import ReportCards from "@/components/admin/ReportCards";
 import ReportFilters from "@/components/admin/ReportFilters";
 import ReportTables from "@/components/admin/ReportTables";
+import DriverSettlementReport from "@/components/admin/DriverSettlementReport";
 import ErrorState from "@/components/ui/ErrorState";
 import LoadingState from "@/components/ui/LoadingState";
 import { subscribeCompanies } from "@/lib/firebase/companies";
 import { subscribeDrivers } from "@/lib/firebase/drivers";
 import { getOrdersInRange } from "@/lib/firebase/orders";
+import { subscribeDriverSettlements } from "@/lib/firebase/driverSettlement";
 import {
   buildCompanyReport,
   buildDailyReport,
@@ -17,12 +19,13 @@ import {
   computeRange,
   type DateRangeKey,
 } from "@/lib/reports";
-import type { Company, Driver, Order, OrderStatus } from "@/types";
+import type { Company, Driver, DriverSettlement, Order, OrderStatus } from "@/types";
 
 export default function ReportsPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [driverSettlements, setDriverSettlements] = useState<DriverSettlement[]>([]);
   const [loadedSig, setLoadedSig] = useState<string | null>(null);
   const [error, setError] = useState("");
 
@@ -38,9 +41,11 @@ export default function ReportsPage() {
   useEffect(() => {
     const u1 = subscribeCompanies((l) => setCompanies(l), () => {});
     const u2 = subscribeDrivers((l) => setDrivers(l), () => {});
+    const u3 = subscribeDriverSettlements((l) => setDriverSettlements(l), () => {});
     return () => {
       u1();
       u2();
+      u3();
     };
   }, []);
 
@@ -91,6 +96,19 @@ export default function ReportsPage() {
   const driverRows = useMemo(() => buildDriverReport(filtered), [filtered]);
   const dailyRows = useMemo(() => buildDailyReport(filtered), [filtered]);
 
+  // Жолоочийн тооцоо — мужид багтаах + driver filter (companyId-д хамаарахгүй).
+  const settlementRows = useMemo(() => {
+    if (!rangeSig) return [];
+    const { start, end } = computeRange(rangeKey, customStart, customEnd);
+    const s = start.getTime();
+    const e = end.getTime();
+    return driverSettlements.filter((x) => {
+      if (x.date < s || x.date > e) return false;
+      if (driverId && x.driverId !== driverId) return false;
+      return true;
+    });
+  }, [driverSettlements, rangeSig, rangeKey, customStart, customEnd, driverId]);
+
   return (
     <div>
       <h1 className="text-2xl font-bold text-navy">Тайлан</h1>
@@ -136,6 +154,10 @@ export default function ReportsPage() {
               driverRows={driverRows}
               dailyRows={dailyRows}
             />
+          </div>
+          <div className="mt-8">
+            <h2 className="mb-3 text-lg font-bold text-navy">Жолоочийн COD тооцоо</h2>
+            <DriverSettlementReport settlements={settlementRows} />
           </div>
         </>
       )}

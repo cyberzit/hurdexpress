@@ -14,6 +14,7 @@ const NAV: NavItem[] = [
   { label: "Шинэ захиалга", href: "/partner/orders/new", icon: "➕" },
   { label: "Миний бараа", href: "/partner/products", icon: "🛒" },
   { label: "Тооцоо", href: "/partner/settlements", icon: "🧾" },
+  { label: "Гүйцэтгэл", href: "/partner/kpi", icon: "📊" },
   { label: "Тайлан", href: "/partner/reports", icon: "📈" },
 ];
 

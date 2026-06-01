@@ -2,6 +2,10 @@
 
 Firebase Hosting дээр online гаргахын өмнө дараах алхмуудыг дараалан гүйцэтгэнэ.
 
+> **Тэмдэглэл:** Deploy нь **гар аргаар** локалаас хийгдэнэ. `git push` нь зөвхөн
+> код хадгална — **auto-deploy хийгдэхгүй**. Production URL зөвхөн
+> `https://hurdexpress.mn` (Firebase Hosting), App Hosting `*.hosted.app` биш.
+
 ## 0. Урьдчилсан бэлтгэл (локал)
 
 - [ ] `npm install`
@@ -19,8 +23,11 @@ NEXT_PUBLIC_FIREBASE_APP_ID=
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=        # (заавал биш)
 NEXT_PUBLIC_FIREBASE_VAPID_KEY=         # (push — заавал биш)
 NEXT_PUBLIC_APP_URL=                    # QR кодын домэйн (заавал биш)
-FIREBASE_SERVICE_ACCOUNT_KEY=           # /api/track-order (нэг мөр JSON)
+NEXT_PUBLIC_TRACK_ORDER_URL=            # trackOrder функцийн URL (заавал биш)
 ```
+
+> Static export тул бүх env нь `NEXT_PUBLIC_` (build үед inline). Серверийн
+> service account түлхүүр апп-д хэрэггүй.
 
 ## 1. Firebase project
 
@@ -36,7 +43,6 @@ FIREBASE_SERVICE_ACCOUNT_KEY=           # /api/track-order (нэг мөр JSON)
 - [ ] `npm i -g firebase-tools`
 - [ ] `npm run firebase:login`
 - [ ] `firebase use --add` → project сонгож `.firebaserc` үүсгэсэн
-- [ ] `firebase experiments:enable webframeworks` (Next.js hosting-д шаардлагатай)
 
 ## 3. Rules + Indexes deploy
 
@@ -68,8 +74,8 @@ FIREBASE_SERVICE_ACCOUNT_KEY=           # /api/track-order (нэг мөр JSON)
 
 ## 6. Hosting deploy
 
-- [ ] `npm run deploy:hosting` (эсвэл бүгдийг `npm run deploy`)
-- [ ] Hosting URL дээр `/login` ачаалагдаж байна
+- [ ] `npm run deploy` (build → `out/` → `firebase deploy --only hosting`)
+- [ ] `out/` хавтас үүссэн; Hosting URL дээр `/login` ачаалагдаж байна
 
 ## 7. Custom domain (заавал биш)
 
@@ -86,14 +92,14 @@ FIREBASE_SERVICE_ACCOUNT_KEY=           # /api/track-order (нэг мөр JSON)
 - [ ] Partner login → order create (`/partner/orders/new`)
 - [ ] Admin assign driver (`/admin/orders` → код → жолооч оноох)
 - [ ] Driver login → status `delivered` болгох
-- [ ] Public tracking (`/track/{orderCode}`) — утас masked, хаяг нуусан
+- [ ] Public tracking (`/track/view?code={orderCode}`) — утас masked, хаяг нуусан
 
 ## Security баталгаажуулалт
 
 - [ ] Нэвтрээгүй хэрэглэгч `/admin/*` руу орвол `/login` руу шиднэ
 - [ ] Partner өөр компанийн захиалга харахгүй
 - [ ] Driver өөр жолоочийн захиалга харахгүй
-- [ ] `FIREBASE_SERVICE_ACCOUNT_KEY` болон SMS API key client bundle-д ороогүй
+- [ ] SMS API key зэрэг нууц утга client bundle-д ороогүй (зөвхөн functions талд)
 - [ ] Туршилтын admin (`admin@hurdexpress.mn` / `HurdAdmin2026!`) нууц үгийг солих эсвэл устгах
 
 > Дэлгэрэнгүй rules тайлбар → [SECURITY.md](SECURITY.md). Тест жагсаалт → [QA_CHECKLIST.md](QA_CHECKLIST.md).

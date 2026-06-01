@@ -1,0 +1,45 @@
+# Firebase App Hosting тохиргоо — https://firebase.google.com/docs/app-hosting/configure
+# App Hosting нь GitHub repo-оос Cloud Build-ээр build хийж Cloud Run дээр ажиллуулна.
+
+runConfig:
+  minInstances: 0
+  maxInstances: 2
+  concurrency: 80
+  cpu: 1
+  memoryMiB: 512
+
+# NEXT_PUBLIC_* нь client-д ил гардаг public утгууд тул энд шууд бичиж болно.
+# Build болон runtime-д хэрэгтэй (BUILD availability чухал — inline хийгдэнэ).
+env:
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: AIzaSyCohBrA4n2I_Y5E9eXhIhZJvws9iKY2Das
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: hurdexpress-49cd2.firebaseapp.com
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: hurdexpress-49cd2
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: hurdexpress-49cd2.firebasestorage.app
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    value: "409714075005"
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: 1:409714075005:web:13d29441b5c8210a495814
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_VAPID_KEY
+    value: BAclofVlTz9prUpPMewoQ5cjpcanrTe0n6EGhhX9LkJf7X7h3HQJRZV2AOi1CMMJpjNBBtAsGqPqgbDpQ3pSNNY
+    availability: [BUILD, RUNTIME]
+  # Заавал биш — Maps болон public URL (тохируулсан бол утга оруулна)
+  # - variable: NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+  #   value: AIza...
+  #   availability: [BUILD, RUNTIME]
+  # - variable: NEXT_PUBLIC_APP_URL
+  #   value: https://<your-app-hosting-domain>
+  #   availability: [BUILD, RUNTIME]
+
+# Тэмдэглэл: FIREBASE_SERVICE_ACCOUNT_KEY ЭНД ХЭРЭГГҮЙ.
+# App Hosting/Cloud Run дээр /api/track-order нь default service account (ADC)-ээр
+# Firestore-д хандана ([src/lib/firebase/admin.ts] — applicationDefault fallback).

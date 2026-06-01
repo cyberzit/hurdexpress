@@ -1,0 +1,206 @@
+rules_version = '2';
+
+// HurdExpress — production Firestore security rules.
+// Зарчим: admin = бүх дата; partner = зөвхөн өөрийн companyId; driver = зөвхөн
+// өөрт оноогдсон orders; public tracking нь rules-аар бус /api/track-order
+// (Firebase Admin SDK) дамжуулан хязгаарлагдмал талбар буцаана.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helpers ──────────────────────────────────────────────
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function userExists() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    function isActiveUser() {
+      return userExists() && userDoc().isActive == true;
+    }
+    function isAdmin() {
+      return isActiveUser() && userDoc().role == 'admin';
+    }
+    function isActivePartner() {
+      return isActiveUser() && userDoc().role == 'partner';
+    }
+    function isActiveDriver() {
+      return isActiveUser() && userDoc().role == 'driver';
+    }
+    function myCompanyId() {
+      return userDoc().companyId;
+    }
+    // Жолоочийн id: users.driverId, байхгүй бол uid.
+    function myDriverId() {
+      return userDoc().driverId == null ? request.auth.uid : userDoc().driverId;
+    }
+    // Тухайн order-ийн талбар (activities-д шалгахад).
+    function orderData(orderId) {
+      return get(/databases/$(database)/documents/orders/$(orderId)).data;
+    }
+
+    // ── users ────────────────────────────────────────────────
+    // Хэрэглэгч өөрийнхөө профайл, admin бүгдийг уншина. Үүсгэх/засах — admin.
+    // (Эхний admin-г Console-оос гараар үүсгэнэ — rules-ийг тойрно.)
+    match /users/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // ── companies ────────────────────────────────────────────
+    // admin CRUD; partner зөвхөн өөрийн байгууллага уншина; driver уншихгүй.
+    match /companies/{companyId} {
+      allow read: if isAdmin()
+        || (isActivePartner() && companyId == myCompanyId());
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // ── products ─────────────────────────────────────────────
+    // admin CRUD; partner зөвхөн өөрийн companyId-ийн бараа унших/үүсгэх/засах.
+    match /products/{productId} {
+      allow read: if isAdmin()
+        || (isActivePartner() && resource.data.companyId == myCompanyId());
+      allow create: if isAdmin()
+        || (isActivePartner() && request.resource.data.companyId == myCompanyId());
+      allow update: if isAdmin()
+        || (isActivePartner()
+            && resource.data.companyId == myCompanyId()
+            && request.resource.data.companyId == myCompanyId());
+      allow delete: if false;
+    }
+
+    // ── drivers ──────────────────────────────────────────────
+    // admin CRUD; driver зөвхөн өөрийн document уншина.
+    match /drivers/{driverId} {
+      allow read: if isAdmin()
+        || (isActiveDriver() && driverId == myDriverId());
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // ── orders ───────────────────────────────────────────────
+    // admin: бүгд; partner: өөрийн companyId (унших/үүсгэх, статус/жолооч засахгүй);
+    // driver: өөрийн driverId (унших + зөвхөн тодорхой талбар засах).
+    // Public tracking ЭНД БАЙХГҮЙ — /api/track-order ашиглана.
+    match /orders/{orderId} {
+      allow read: if isAdmin()
+        || (isActivePartner() && resource.data.companyId == myCompanyId())
+        || (isActiveDriver() && resource.data.driverId == myDriverId());
+
+      allow create: if isAdmin()
+        || (isActivePartner()
+            && request.resource.data.companyId == myCompanyId()
+            && request.resource.data.status == 'pending');
+
+      allow update: if isAdmin()
+        // Driver: зөвхөн доорх талбаруудыг засна (амжилтгүй шалтгаан оруулна).
+        || (isActiveDriver()
+            && resource.data.driverId == myDriverId()
+            && request.resource.data.driverId == resource.data.driverId
+            && request.resource.data.companyId == resource.data.companyId
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['status', 'codCollected', 'driverNote',
+                           'pickedUpAt', 'deliveredAt', 'updatedAt',
+                           'lastDriverLocation',
+                           'failedReason', 'failedAt', 'failedBy']))
+        // Partner: зөвхөн ӨӨРИЙН PENDING захиалгад
+        || (isActivePartner()
+            && resource.data.companyId == myCompanyId()
+            && resource.data.status == 'pending'
+            && (
+              // (a) засвар — статус/жолооч/үндсэн талбар өөрчлөхгүй
+              !request.resource.data.diff(resource.data).affectedKeys()
+                 .hasAny(['status', 'driverId', 'driverName', 'companyId',
+                          'companyName', 'orderCode', 'createdByUid'])
+              // (b) цуцлах — зөвхөн cancelled болгож cancel талбар нэмнэ
+              || (request.resource.data.status == 'cancelled'
+                  && request.resource.data.diff(resource.data).affectedKeys()
+                       .hasOnly(['status', 'cancelReason', 'cancelledAt',
+                                 'cancelledBy', 'updatedAt']))
+            ));
+
+      allow delete: if false;
+    }
+
+    // ── settlements / payments ───────────────────────────────
+    // admin удирдана; partner зөвхөн өөрийн байгууллагынхыг уншина.
+    match /settlements/{settlementId} {
+      allow read: if isAdmin()
+        || (isActivePartner() && resource.data.companyId == myCompanyId());
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+    match /payments/{paymentId} {
+      allow read: if isAdmin()
+        || (isActivePartner() && resource.data.companyId == myCompanyId());
+      allow create: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    // ── notifications ────────────────────────────────────────
+    // Хэрэглэгч зөвхөн өөрийнхөө мэдэгдэл уншина, зөвхөн isRead-г засна.
+    // Үүсгэх — зөвхөн admin (бусад тохиолдолд Cloud Function ашиглана).
+    match /notifications/{notifId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isAdmin();
+      allow update: if isSignedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']);
+      allow delete: if false;
+    }
+
+    // ── activities ───────────────────────────────────────────
+    // admin бүгд; partner/driver зөвхөн өөрт хамаарах order-ийн лог уншина.
+    // Үүсгэхдээ actorId-аа хуурамчаар тавихыг хориглоно. Засах/устгах — хориотой.
+    match /activities/{activityId} {
+      allow read: if isAdmin()
+        || (isActivePartner()
+            && orderData(resource.data.orderId).companyId == myCompanyId())
+        || (isActiveDriver()
+            && orderData(resource.data.orderId).driverId == myDriverId());
+      allow create: if isSignedIn()
+        && request.resource.data.actorId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // ── settings ─────────────────────────────────────────────
+    // settings/general — брэнд/нийтийн config (login дээр харагдана) → public read.
+    match /settings/general {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    // Бусад settings doc (жишээ: settings/sms — SMS API key) → зөвхөн admin.
+    match /settings/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    // ── driverLocations ──────────────────────────────────────
+    // Driver зөвхөн өөрийн байршлыг бичнэ; admin бүгдийг уншина.
+    // Partner шууд уншихгүй — order.lastDriverLocation (денормализ)-аар харна.
+    match /driverLocations/{driverId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin()
+        || (isActiveDriver() && driverId == myDriverId());
+    }
+
+    // ── smsLogs ──────────────────────────────────────────────
+    // Зөвхөн admin унших. Бичих/шинэчлэхийг зөвхөн Functions (Admin SDK) хийнэ.
+    match /smsLogs/{logId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // ── shipments (LEGACY) ───────────────────────────────────
+    // Task-1-ийн хуучин collection. Энэ системд ашиглагдахгүй — admin-аар хязгаарлав.
+    // Зөвлөмж: /track хуудас болон shipments-ийг устгах эсвэл orders-той нэгтгэх.
+    match /shipments/{shipmentId} {
+      allow read, write: if isAdmin();
+    }
+  }
+}

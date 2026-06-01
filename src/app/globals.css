@@ -12,15 +12,52 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Brand өнгөнүүд — bg-brand, text-navy гэх мэт utility үүснэ */
+@theme {
+  --color-brand: #f97316;
+  --color-brand-dark: #ea580c;
+  --color-navy: #0b1b33;
+  --color-navy-light: #13294d;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Keyboard focus — нэвтрэх боломж (accessibility) */
+a:focus-visible,
+button:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: 0.5rem;
+}
+
+/* Safe-area (iOS notch / home indicator) padding туслахууд */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
+/* Хэвлэх (waybill) — A6 хэмжээ, цагаан дэвсгэр */
+@media print {
+  @page {
+    size: A6;
+    margin: 6mm;
+  }
+  body {
+    background: #ffffff;
+  }
+}
+
+/* Маш бүдэг grid pattern (login background) */
+.bg-grid {
+  background-image:
+    linear-gradient(to right, rgba(11, 27, 51, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(11, 27, 51, 0.05) 1px, transparent 1px);
+  background-size: 36px 36px;
 }

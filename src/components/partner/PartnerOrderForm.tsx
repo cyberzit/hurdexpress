@@ -1,0 +1,289 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
+import { getCompany } from "@/lib/firebase/companies";
+import { subscribeProductsByCompany } from "@/lib/firebase/products";
+import { addOrder, type OrderInput } from "@/lib/firebase/orders";
+import { logActivity } from "@/lib/firebase/activity";
+import { getSettings } from "@/lib/settings";
+import type { Product } from "@/types";
+
+const inputClass =
+  "w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-navy outline-none transition focus:border-brand focus:bg-white focus:ring-2 focus:ring-brand/20";
+
+const labelClass = "text-sm font-medium text-slate-600";
+
+export default function PartnerOrderForm() {
+  const router = useRouter();
+  const { profile } = useAuth();
+  const companyId = profile?.companyId ?? "";
+
+  const [companyName, setCompanyName] = useState("");
+  const [products, setProducts] = useState<Product[]>([]);
+
+  const [productId, setProductId] = useState("");
+  const [itemName, setItemName] = useState("");
+  const [receiverName, setReceiverName] = useState("");
+  const [receiverPhone, setReceiverPhone] = useState("");
+  const [receiverAddress, setReceiverAddress] = useState("");
+  const [qty, setQty] = useState("1");
+  const [codAmount, setCodAmount] = useState("0");
+  const [deliveryPrice, setDeliveryPrice] = useState("6000");
+  const [note, setNote] = useState("");
+
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  // Байгууллагын нэр
+  useEffect(() => {
+    if (!companyId) return;
+    getCompany(companyId)
+      .then((c) => setCompanyName(c?.name ?? ""))
+      .catch(() => {});
+  }, [companyId]);
+
+  // Үндсэн хүргэлтийн үнийг settings-ээс (нэг удаа, mount дээр).
+  useEffect(() => {
+    getSettings()
+      .then((s) => {
+        if (s?.defaultDeliveryPrice != null) {
+          setDeliveryPrice(String(s.defaultDeliveryPrice));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Өөрийн байгууллагын active бараанууд (real-time)
+  useEffect(() => {
+    if (!companyId) return;
+    const unsub = subscribeProductsByCompany(
+      companyId,
+      (list) => setProducts(list),
+      () => {},
+    );
+    return () => unsub();
+  }, [companyId]);
+
+  const totalAmount = (Number(codAmount) || 0) + (Number(deliveryPrice) || 0);
+
+  function handleProductChange(id: string) {
+    setProductId(id);
+    const product = products.find((p) => p.id === id);
+    if (product) {
+      setItemName(product.name);
+      setCodAmount(String(product.price));
+    }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+
+    if (!companyId) return setError("Байгууллага холбогдоогүй байна.");
+    if (!receiverName.trim()) return setError("Хүлээн авагчийн нэр заавал бөглөнө.");
+    if (!receiverPhone.trim()) return setError("Хүлээн авагчийн утас заавал бөглөнө.");
+    if (!receiverAddress.trim()) return setError("Хаяг заавал бөглөнө.");
+
+    const qtyNum = Number(qty);
+    if (!qty.trim() || Number.isNaN(qtyNum) || qtyNum < 1) {
+      return setError("Тоо ширхэг зөв тоо байх ёстой.");
+    }
+    const deliveryNum = Number(deliveryPrice);
+    if (!deliveryPrice.trim() || Number.isNaN(deliveryNum) || deliveryNum < 0) {
+      return setError("Хүргэлтийн үнэ зөв тоо байх ёстой.");
+    }
+
+    const product = products.find((p) => p.id === productId);
+
+    const payload: OrderInput = {
+      companyId,
+      companyName,
+      receiverName,
+      receiverPhone,
+      receiverAddress,
+      itemName,
+      productId: product?.id,
+      productName: product?.name,
+      qty: qtyNum,
+      deliveryPrice: deliveryNum,
+      codAmount: Number(codAmount) || 0,
+      note,
+      createdByUid: profile?.uid,
+    };
+
+    setBusy(true);
+    try {
+      const { id, orderCode } = await addOrder(payload);
+      // Activity бүртгэх (амжилтгүй болсон ч захиалга үүссэн тул блокдохгүй).
+      if (profile) {
+        try {
+          await logActivity({
+            orderId: id,
+            orderCode,
+            action: "Захиалга үүсгэсэн",
+            actorId: profile.uid,
+            actorName: profile.name,
+            actorRole: "partner",
+          });
+        } catch {
+          /* лог амжаагүй ч үргэлжилнэ */
+        }
+      }
+      router.push("/partner/orders");
+    } catch {
+      setError("Захиалга хадгалахад алдаа гарлаа. Дахин оролдоно уу.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
+      noValidate
+    >
+      {error && (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
+      )}
+
+      {/* Байгууллага (түгжээтэй) */}
+      <div className="rounded-xl bg-slate-50 px-4 py-3">
+        <p className="text-xs text-slate-500">Байгууллага</p>
+        <p className="font-semibold text-navy">{companyName || "…"}</p>
+      </div>
+
+      <div>
+        <label className={labelClass}>Бараа сонгох</label>
+        <select
+          className={inputClass}
+          value={productId}
+          onChange={(e) => handleProductChange(e.target.value)}
+          disabled={busy}
+        >
+          <option value="">— Сонгох (заавал биш) —</option>
+          {products.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name} — {p.price.toLocaleString("mn-MN")}₮
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label className={labelClass}>Барааны нэр</label>
+        <input
+          className={inputClass}
+          value={itemName}
+          onChange={(e) => setItemName(e.target.value)}
+          placeholder="Бараа сонгоход автоматаар бөглөгдөнө"
+          disabled={busy}
+        />
+      </div>
+
+      <div>
+        <label className={labelClass}>Хүлээн авагчийн нэр *</label>
+        <input
+          className={inputClass}
+          value={receiverName}
+          onChange={(e) => setReceiverName(e.target.value)}
+          disabled={busy}
+        />
+      </div>
+
+      <div>
+        <label className={labelClass}>Хүлээн авагчийн утас *</label>
+        <input
+          className={inputClass}
+          value={receiverPhone}
+          onChange={(e) => setReceiverPhone(e.target.value)}
+          disabled={busy}
+        />
+      </div>
+
+      <div>
+        <label className={labelClass}>Хаяг *</label>
+        <input
+          className={inputClass}
+          value={receiverAddress}
+          onChange={(e) => setReceiverAddress(e.target.value)}
+          disabled={busy}
+        />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <div>
+          <label className={labelClass}>Тоо ширхэг *</label>
+          <input
+            className={inputClass}
+            type="number"
+            min={1}
+            value={qty}
+            onChange={(e) => setQty(e.target.value)}
+            disabled={busy}
+          />
+        </div>
+        <div>
+          <label className={labelClass}>COD дүн (₮)</label>
+          <input
+            className={inputClass}
+            type="number"
+            min={0}
+            step={100}
+            value={codAmount}
+            onChange={(e) => setCodAmount(e.target.value)}
+            disabled={busy}
+          />
+        </div>
+        <div>
+          <label className={labelClass}>Хүргэлтийн үнэ (₮) *</label>
+          <input
+            className={inputClass}
+            type="number"
+            min={0}
+            step={100}
+            value={deliveryPrice}
+            onChange={(e) => setDeliveryPrice(e.target.value)}
+            disabled={busy}
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className={labelClass}>Тэмдэглэл</label>
+        <textarea
+          className={`${inputClass} min-h-20 resize-y`}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          disabled={busy}
+        />
+      </div>
+
+      <div className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
+        <span className="text-sm font-medium text-slate-600">Нийт дүн</span>
+        <span className="text-lg font-bold text-navy">
+          {totalAmount.toLocaleString("mn-MN")}₮
+        </span>
+      </div>
+
+      <div className="flex gap-3">
+        <button
+          type="button"
+          onClick={() => router.push("/partner/orders")}
+          disabled={busy}
+          className="flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm font-medium text-navy transition hover:bg-slate-50 disabled:opacity-60"
+        >
+          Болих
+        </button>
+        <button
+          type="submit"
+          disabled={busy}
+          className="flex-1 rounded-xl bg-brand px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-dark disabled:opacity-60"
+        >
+          {busy ? "Хадгалж байна…" : "Захиалга үүсгэх"}
+        </button>
+      </div>
+    </form>
+  );
+}

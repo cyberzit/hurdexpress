@@ -6,12 +6,24 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "seed": "node scripts/seed-client.mjs",
+    "deploy": "firebase deploy --only functions,firestore",
+    "deploy:functions": "npm --prefix functions install && firebase deploy --only functions",
+    "deploy:rules": "firebase deploy --only firestore:rules,firestore:indexes",
+    "firebase:login": "firebase login",
+    "firebase:init": "firebase init"
   },
   "dependencies": {
+    "@opentelemetry/api": "^1.9.1",
+    "@react-google-maps/api": "^2.20.8",
+    "firebase": "^12.14.0",
+    "firebase-admin": "^13.10.0",
     "next": "16.2.6",
+    "qrcode.react": "^4.2.0",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

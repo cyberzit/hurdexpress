@@ -1,11 +1,13 @@
 "use client";
 
+import StockBadge from "@/components/products/StockBadge";
 import type { Product } from "@/types";
 
 interface Props {
   products: Product[];
   onEdit: (product: Product) => void;
   onToggleActive: (product: Product) => void;
+  onAdjust: (product: Product) => void;
 }
 
 // Барааны жижиг зураг (lazy) — байхгүй бол placeholder.
@@ -29,7 +31,7 @@ function ProductThumb({ product }: { product: Product }) {
   );
 }
 
-export default function ProductTable({ products, onEdit, onToggleActive }: Props) {
+export default function ProductTable({ products, onEdit, onToggleActive, onAdjust }: Props) {
   return (
     <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
       <table className="w-full min-w-[720px] text-left text-sm">
@@ -40,6 +42,7 @@ export default function ProductTable({ products, onEdit, onToggleActive }: Props
             <th className="px-4 py-3 font-medium">Барааны нэр</th>
             <th className="px-4 py-3 font-medium">SKU</th>
             <th className="px-4 py-3 font-medium">Үнэ</th>
+            <th className="px-4 py-3 font-medium">Үлдэгдэл</th>
             <th className="px-4 py-3 font-medium">Төлөв</th>
             <th className="px-4 py-3 text-right font-medium">Үйлдэл</th>
           </tr>
@@ -60,6 +63,9 @@ export default function ProductTable({ products, onEdit, onToggleActive }: Props
                 {p.price.toLocaleString("mn-MN")}₮
               </td>
               <td className="px-4 py-3">
+                <StockBadge product={p} />
+              </td>
+              <td className="px-4 py-3">
                 <button
                   onClick={() => onToggleActive(p)}
                   className={`rounded-full px-2.5 py-1 text-xs font-medium transition ${
@@ -72,12 +78,20 @@ export default function ProductTable({ products, onEdit, onToggleActive }: Props
                 </button>
               </td>
               <td className="px-4 py-3 text-right">
-                <button
-                  onClick={() => onEdit(p)}
-                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-navy transition hover:bg-slate-50"
-                >
-                  Засах
-                </button>
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    onClick={() => onAdjust(p)}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-navy transition hover:bg-slate-50"
+                  >
+                    Үлдэгдэл
+                  </button>
+                  <button
+                    onClick={() => onEdit(p)}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-navy transition hover:bg-slate-50"
+                  >
+                    Засах
+                  </button>
+                </div>
               </td>
             </tr>
           ))}

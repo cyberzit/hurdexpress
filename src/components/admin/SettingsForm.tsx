@@ -9,6 +9,8 @@ import {
   subscribeSettings,
   type SettingsInput,
 } from "@/lib/settings";
+import { uploadLogo } from "@/lib/imageUpload";
+import ImageUpload, { type ImageUploadState } from "@/components/ui/ImageUpload";
 import type { DriverSalaryMode, SmsProvider } from "@/types";
 
 const inputClass =
@@ -27,6 +29,8 @@ export default function SettingsForm() {
   const [error, setError] = useState("");
   const [toast, setToast] = useState<Toast | null>(null);
   const [smsApiKey, setSmsApiKey] = useState("");
+  const [logo, setLogo] = useState<ImageUploadState>({ file: null, cleared: false });
+  const [logoProgress, setLogoProgress] = useState<number | null>(null);
   const hydrated = useRef(false);
 
   // Realtime унших — анх ачаалахад л форм утгыг суулгана (edit-г дарахгүй).
@@ -38,6 +42,7 @@ export default function SettingsForm() {
             setForm({
               companyName: settings.companyName,
               brandName: settings.brandName,
+              aboutText: settings.aboutText,
               phone: settings.phone,
               email: settings.email ?? "",
               address: settings.address ?? "",
@@ -97,12 +102,23 @@ export default function SettingsForm() {
 
     setSaving(true);
     try {
-      await saveSettings(form);
+      // Лого — шинэ файл бол upload, устгасан бол хоосон.
+      let logoUrl = form.logoUrl ?? "";
+      if (logo.file) {
+        setLogoProgress(0);
+        logoUrl = await uploadLogo(logo.file, setLogoProgress);
+      } else if (logo.cleared) {
+        logoUrl = "";
+      }
+
+      await saveSettings({ ...form, logoUrl });
       // SMS API key — тусдаа admin-only doc-д.
       await saveSmsApiKey(smsApiKey);
+      setLogoProgress(null);
       setToast({ type: "success", message: "Тохиргоо хадгалагдлаа." });
     } catch {
       setToast({ type: "error", message: "Хадгалахад алдаа гарлаа." });
+      setLogoProgress(null);
     } finally {
       setSaving(false);
     }
@@ -147,6 +163,19 @@ export default function SettingsForm() {
               disabled={saving}
             />
           </div>
+        </div>
+
+        <div>
+          <label className={labelClass}>Нүүр хуудасны &quot;Бидний тухай&quot; текст</label>
+          <textarea
+            className={`${inputClass} min-h-32 resize-y`}
+            value={form.aboutText}
+            onChange={(e) => update("aboutText", e.target.value)}
+            disabled={saving}
+          />
+          <p className="mt-1 text-xs text-slate-400">
+            Нэвтрэх (нүүр) хуудасны танилцуулга текст. Хадгалмагц шууд шинэчлэгдэнэ.
+          </p>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -209,14 +238,15 @@ export default function SettingsForm() {
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className={labelClass}>Лого URL</label>
-            <input
-              className={inputClass}
-              value={form.logoUrl ?? ""}
-              onChange={(e) => update("logoUrl", e.target.value)}
-              placeholder="https://…"
-              disabled={saving}
-            />
+            <label className={labelClass}>Лого</label>
+            <div className="mt-1.5">
+              <ImageUpload
+                existingUrl={form.logoUrl || undefined}
+                onChange={setLogo}
+                disabled={saving}
+                progress={logoProgress}
+              />
+            </div>
           </div>
           <div>
             <label className={labelClass}>Primary өнгө</label>

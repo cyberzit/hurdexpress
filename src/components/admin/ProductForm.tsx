@@ -8,6 +8,7 @@ import {
   type ProductInput,
 } from "@/lib/firebase/products";
 import { deleteProductImage, uploadProductImage } from "@/lib/imageUpload";
+import { setLowStockAlert } from "@/lib/firebase/inventory";
 import ImageUpload, { type ImageUploadState } from "@/components/ui/ImageUpload";
 import type { Company, Product } from "@/types";
 
@@ -33,6 +34,11 @@ export default function ProductForm({ initial, companies, onClose }: Props) {
   const [isActive, setIsActive] = useState(initial?.isActive ?? true);
   const [image, setImage] = useState<ImageUploadState>({ file: null, cleared: false });
   const [progress, setProgress] = useState<number | null>(null);
+  // Үлдэгдэл: шинээр үүсгэх үед эхний тоо; босго хоёр горимд засна.
+  const [initialStock, setInitialStock] = useState("0");
+  const [lowStockAlert, setLowStockAlertQty] = useState(
+    initial ? String(initial.lowStockAlertQty ?? 0) : "0",
+  );
 
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -96,10 +102,18 @@ export default function ProductForm({ initial, companies, onClose }: Props) {
       }
 
       const payload: ProductInput = { ...base, ...img };
+      const alertQty = Math.max(0, Number(lowStockAlert) || 0);
       if (isEdit && initial) {
         await updateProduct(initial.id, payload);
+        // Босго өөрчлөгдсөн бол шинэчилнэ (stockQty-г энд хөндөхгүй — adjust modal-аар).
+        if (alertQty !== (initial.lowStockAlertQty ?? 0)) {
+          await setLowStockAlert(initial.id, alertQty);
+        }
       } else {
-        await createProductWithId(productId, payload);
+        await createProductWithId(productId, payload, {
+          stockQty: Math.max(0, Number(initialStock) || 0),
+          lowStockAlertQty: alertQty,
+        });
       }
       onClose();
     } catch (err) {
@@ -182,6 +196,48 @@ export default function ProductForm({ initial, companies, onClose }: Props) {
                 step={100}
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
+                disabled={busy}
+              />
+            </div>
+          </div>
+
+          {/* Агуулахын үлдэгдэл */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            {isEdit ? (
+              <div className="rounded-xl bg-slate-50 px-4 py-2.5">
+                <p className="text-xs text-slate-500">Одоогийн үлдэгдэл</p>
+                <p className="text-sm font-semibold text-navy">
+                  {initial?.stockQty ?? 0} ш{" "}
+                  <span className="font-normal text-slate-400">
+                    (боломжит {initial?.availableQty ?? 0}, түгжсэн{" "}
+                    {initial?.reservedQty ?? 0})
+                  </span>
+                </p>
+                <p className="mt-0.5 text-xs text-slate-400">
+                  Үлдэгдэл өөрчлөхдөө «Үлдэгдэл» товчоор тохируулна.
+                </p>
+              </div>
+            ) : (
+              <div>
+                <label className={labelClass}>Эхний үлдэгдэл (ш)</label>
+                <input
+                  className={inputClass}
+                  type="number"
+                  min={0}
+                  value={initialStock}
+                  onChange={(e) => setInitialStock(e.target.value)}
+                  disabled={busy}
+                />
+              </div>
+            )}
+            <div>
+              <label className={labelClass}>Бага үлдэгдлийн анхааруулга (ш)</label>
+              <input
+                className={inputClass}
+                type="number"
+                min={0}
+                value={lowStockAlert}
+                onChange={(e) => setLowStockAlertQty(e.target.value)}
                 disabled={busy}
               />
             </div>

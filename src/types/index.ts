@@ -67,10 +67,41 @@ export interface Product {
   imagePath?: string; // Storage зам — main.webp (солих/устгахад)
   thumbnailPath?: string; // Storage зам — thumb.webp
   description?: string;
+  // Агуулахын үлдэгдэл (admin удирдана; availableQty = stockQty - reservedQty)
+  stockQty: number; // нийт үлдэгдэл
+  reservedQty: number; // захиалгад түгжигдсэн
+  availableQty: number; // боломжит (stockQty - reservedQty)
+  lowStockAlertQty: number; // бага үлдэгдлийн анхааруулгын босго
   isActive: boolean;
   createdAt: number; // ms
   updatedAt: number; // ms
 }
+
+// Агуулахын хөдөлгөөн (Firestore: inventoryMovements)
+export type InventoryMovementType = "in" | "out" | "adjustment" | "reserve" | "release";
+
+export interface InventoryMovement {
+  id: string;
+  productId: string;
+  companyId: string;
+  type: InventoryMovementType;
+  qty: number;
+  beforeQty: number;
+  afterQty: number;
+  reason?: string;
+  orderId?: string;
+  actorId: string;
+  actorName: string;
+  createdAt: number; // ms
+}
+
+export const INVENTORY_MOVEMENT_LABELS: Record<InventoryMovementType, string> = {
+  in: "Орлого",
+  out: "Зарлага",
+  adjustment: "Тохируулга",
+  reserve: "Захиалгад түгжсэн",
+  release: "Чөлөөлсөн",
+};
 
 // Жолооч (Firestore: drivers)
 export type VehicleType = "car" | "motorcycle" | "bike" | "walking";
@@ -264,6 +295,7 @@ export interface PartnerKpi {
 export interface GeneralSettings {
   companyName: string;
   brandName: string;
+  aboutText: string; // нүүр (login) хуудасны "Бидний тухай" текст
   phone: string;
   email?: string;
   address?: string;

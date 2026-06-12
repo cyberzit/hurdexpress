@@ -50,6 +50,14 @@ function mapProduct(id: string, data: Record<string, unknown>): Product {
     imagePath: data.imagePath as string | undefined,
     thumbnailPath: data.thumbnailPath as string | undefined,
     description: data.description as string | undefined,
+    // Үлдэгдэл — байхгүй бол 0. availableQty = stockQty - reservedQty (clamp ≥0).
+    stockQty: (data.stockQty as number) ?? 0,
+    reservedQty: (data.reservedQty as number) ?? 0,
+    availableQty: Math.max(
+      0,
+      ((data.stockQty as number) ?? 0) - ((data.reservedQty as number) ?? 0),
+    ),
+    lowStockAlertQty: (data.lowStockAlertQty as number) ?? 0,
     isActive: Boolean(data.isActive),
     createdAt: toMillis(data.createdAt),
     updatedAt: toMillis(data.updatedAt),
@@ -126,9 +134,21 @@ export function subscribeProductsByCompany(
   );
 }
 
+// Шинэ бараа үүсгэхэд үлдэгдлийн анхдагч талбарууд.
+function initialStockFields(stockQty = 0, lowStockAlertQty = 0): Record<string, number> {
+  const qty = Math.max(0, stockQty);
+  return {
+    stockQty: qty,
+    reservedQty: 0,
+    availableQty: qty,
+    lowStockAlertQty: Math.max(0, lowStockAlertQty),
+  };
+}
+
 export async function addProduct(input: ProductInput): Promise<string> {
   const ref = await addDoc(collection(db, COLLECTION), {
     ...buildDoc(input),
+    ...initialStockFields(),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
@@ -141,12 +161,15 @@ export function generateProductId(): string {
 }
 
 // Тодорхой id-тай бараа үүсгэх (зургийг эхэлж тэр id-аар upload хийсний дараа).
+// stock — зөвхөн admin create үед эхний үлдэгдэл/босго (partner дамжуулахгүй).
 export async function createProductWithId(
   id: string,
   input: ProductInput,
+  stock?: { stockQty: number; lowStockAlertQty: number },
 ): Promise<void> {
   await setDoc(doc(db, COLLECTION, id), {
     ...buildDoc(input),
+    ...initialStockFields(stock?.stockQty ?? 0, stock?.lowStockAlertQty ?? 0),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });

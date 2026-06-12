@@ -10,6 +10,14 @@ service firebase.storage {
         && request.resource.contentType.matches('image/.*');
     }
 
+    // Брэндийн лого: branding/{fileName} — нийтэд read, нэвтэрсэн (admin UI) write.
+    match /branding/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
     // Барааны зураг: products/{companyId}/{productId}/{fileName}
     //  - read: нийтэд нээлттэй (сайт дээр харагдана)
     //  - write: нэвтэрсэн хэрэглэгч, зөвхөн зураг, шахсан webp тул 5MB-аас бага

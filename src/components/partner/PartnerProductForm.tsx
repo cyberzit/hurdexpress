@@ -127,6 +127,24 @@ export default function PartnerProductForm({
           </div>
         </div>
 
+        {/* Үлдэгдэл — зөвхөн read-only (admin л өөрчилнө) */}
+        {isEdit && initial && (
+          <div className="grid grid-cols-3 gap-2 rounded-xl bg-slate-50 p-3 text-center">
+            <div>
+              <p className="text-base font-bold text-navy">{initial.stockQty ?? 0}</p>
+              <p className="text-xs text-slate-500">Нийт үлдэгдэл</p>
+            </div>
+            <div>
+              <p className="text-base font-bold text-amber-600">{initial.reservedQty ?? 0}</p>
+              <p className="text-xs text-slate-500">Түгжигдсэн</p>
+            </div>
+            <div>
+              <p className="text-base font-bold text-green-600">{initial.availableQty ?? 0}</p>
+              <p className="text-xs text-slate-500">Боломжит</p>
+            </div>
+          </div>
+        )}
+
         <div>
           <label className={labelClass}>Барааны зураг</label>
           <div className="mt-1.5">

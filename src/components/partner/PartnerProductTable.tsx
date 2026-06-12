@@ -1,6 +1,7 @@
 "use client";
 
 import Button from "@/components/ui/Button";
+import StockBadge from "@/components/products/StockBadge";
 import { formatCurrency } from "@/lib/format";
 import type { Product } from "@/types";
 
@@ -59,6 +60,7 @@ export default function PartnerProductTable({ products, onEdit, onToggleActive }
               <th className="px-4 py-3 font-medium">Нэр</th>
               <th className="px-4 py-3 font-medium">SKU</th>
               <th className="px-4 py-3 font-medium">Үнэ</th>
+              <th className="px-4 py-3 font-medium">Үлдэгдэл</th>
               <th className="px-4 py-3 font-medium">Төлөв</th>
               <th className="px-4 py-3 text-right font-medium">Үйлдэл</th>
             </tr>
@@ -72,6 +74,9 @@ export default function PartnerProductTable({ products, onEdit, onToggleActive }
                 <td className="px-4 py-3 font-medium text-navy">{p.name}</td>
                 <td className="px-4 py-3 text-slate-600">{p.sku || "—"}</td>
                 <td className="px-4 py-3 text-slate-600">{formatCurrency(p.price)}</td>
+                <td className="px-4 py-3">
+                  <StockBadge product={p} partner />
+                </td>
                 <td className="px-4 py-3">
                   <ActiveBtn product={p} onToggleActive={onToggleActive} />
                 </td>
@@ -102,6 +107,9 @@ export default function PartnerProductTable({ products, onEdit, onToggleActive }
             </div>
             <div className="mt-3 flex items-center justify-between">
               <span className="font-semibold text-navy">{formatCurrency(p.price)}</span>
+              <StockBadge product={p} partner />
+            </div>
+            <div className="mt-2 flex justify-end">
               <Button size="sm" variant="outline" onClick={() => onEdit(p)}>
                 Засах
               </Button>

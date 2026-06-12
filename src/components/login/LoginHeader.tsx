@@ -1,16 +1,11 @@
+import BrandLogo from "@/components/BrandLogo";
+
 export default function LoginHeader() {
   return (
     <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/80 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
         {/* Зүүн тал — лого */}
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand font-bold text-white shadow-sm">
-            HX
-          </div>
-          <span className="text-lg font-bold tracking-tight text-navy">
-            Hurd<span className="text-brand">Express</span>
-          </span>
-        </div>
+        <BrandLogo tone="dark" />
 
         {/* Дунд — хувилбар (зөвхөн дэлгэц өргөн үед) */}
         <span className="hidden rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-500 md:inline-block">

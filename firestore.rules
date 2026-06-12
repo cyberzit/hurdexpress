@@ -68,11 +68,26 @@ service cloud.firestore {
         || (isActivePartner() && resource.data.companyId == myCompanyId());
       allow create: if isAdmin()
         || (isActivePartner() && request.resource.data.companyId == myCompanyId());
+      // Partner өөрийн барааг засна — гэхдээ агуулахын үлдэгдэл талбарыг хөндөхгүй
+      // (stockQty/reservedQty/availableQty/lowStockAlertQty зөвхөн admin/Cloud Function).
       allow update: if isAdmin()
         || (isActivePartner()
             && resource.data.companyId == myCompanyId()
-            && request.resource.data.companyId == myCompanyId());
+            && request.resource.data.companyId == myCompanyId()
+            && request.resource.data.stockQty == resource.data.stockQty
+            && request.resource.data.reservedQty == resource.data.reservedQty
+            && request.resource.data.availableQty == resource.data.availableQty
+            && request.resource.data.lowStockAlertQty == resource.data.lowStockAlertQty);
       allow delete: if false;
+    }
+
+    // ── inventoryMovements (агуулахын хөдөлгөөн) ─────────────
+    // Бичих нь зөвхөн admin (гар тохируулга) эсвэл Cloud Function (admin SDK).
+    match /inventoryMovements/{id} {
+      allow read: if isAdmin()
+        || (isActivePartner() && resource.data.companyId == myCompanyId());
+      allow create: if isAdmin();
+      allow update, delete: if false;
     }
 
     // ── drivers ──────────────────────────────────────────────

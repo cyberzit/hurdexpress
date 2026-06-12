@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import ProductForm from "@/components/admin/ProductForm";
 import ProductTable from "@/components/admin/ProductTable";
+import InventoryAdjustModal from "@/components/admin/InventoryAdjustModal";
 import EmptyState from "@/components/ui/EmptyState";
 import ErrorState from "@/components/ui/ErrorState";
 import LoadingState from "@/components/ui/LoadingState";
@@ -24,6 +25,7 @@ export default function ProductsPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
+  const [adjusting, setAdjusting] = useState<Product | null>(null);
 
   // Бараа — real-time
   useEffect(() => {
@@ -149,6 +151,7 @@ export default function ProductsPage() {
             products={filtered}
             onEdit={openEdit}
             onToggleActive={toggleActive}
+            onAdjust={(p) => setAdjusting(p)}
           />
         )}
       </div>
@@ -158,6 +161,13 @@ export default function ProductsPage() {
           initial={editing}
           companies={activeCompanies}
           onClose={() => setFormOpen(false)}
+        />
+      )}
+
+      {adjusting && (
+        <InventoryAdjustModal
+          product={products.find((p) => p.id === adjusting.id) ?? adjusting}
+          onClose={() => setAdjusting(null)}
         />
       )}
     </div>

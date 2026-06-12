@@ -1,4 +1,20 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { DEFAULT_ABOUT_TEXT, getSettings } from "@/lib/settings";
+
 export default function AboutCard() {
+  const [aboutText, setAboutText] = useState(DEFAULT_ABOUT_TEXT);
+
+  // Тохиргооноос "Бидний тухай" текст (нийтэд унших боломжтой settings/general).
+  useEffect(() => {
+    getSettings()
+      .then((s) => {
+        if (s?.aboutText?.trim()) setAboutText(s.aboutText);
+      })
+      .catch(() => {});
+  }, []);
+
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       {/* Дээд тал — illustration placeholder */}
@@ -18,15 +34,13 @@ export default function AboutCard() {
       {/* Текст хэсэг */}
       <div className="p-6 sm:p-8">
         <h2 className="text-xl font-bold text-navy sm:text-2xl">Бидний тухай</h2>
-        <p className="mt-3 leading-relaxed text-slate-600">
-          HurdExpress нь онлайн дэлгүүрүүдийн барааг Улаанбаатар хотын А бүс дотор
-          6,000₮-өөр шуурхай хүргэх, мөн хөдөө орон нутгийн унаанд бараа тавьж өгөх
-          үйлчилгээ үзүүлдэг хүргэлтийн систем юм.
+        <p className="mt-3 whitespace-pre-line leading-relaxed text-slate-600">
+          {aboutText}
         </p>
 
         <ul className="mt-6 grid grid-cols-2 gap-3 text-sm">
           {[
-            { k: "А бүс хүргэлт", v: "6,000₮" },
+            { k: "Улаанбаатар хот", v: "Бүх бүсэд шуурхай" },
             { k: "Хөдөө орон нутаг", v: "Унаанд тавьж өгнө" },
           ].map((item) => (
             <li

@@ -125,6 +125,35 @@ export async function uploadProductImage(
   return { photoUrl, thumbnailUrl, imagePath, thumbnailPath };
 }
 
+/**
+ * Брэндийн лого — webp болгож шахаад branding/logo.webp-д байрлуулна (replace).
+ * Download URL буцаана (settings.logoUrl-д хадгална).
+ */
+export async function uploadLogo(
+  file: File,
+  onProgress?: (percent: number) => void,
+): Promise<string> {
+  const validationError = validateImageFile(file);
+  if (validationError) throw new Error(validationError);
+
+  const ts = Date.now();
+  const webp = await resizeImageToWebP(file, 512, 512, 0.85, `logo_${ts}.webp`);
+  const path = "branding/logo.webp";
+
+  const task = uploadBytesResumable(ref(storage, path), webp, {
+    contentType: "image/webp",
+  });
+  await new Promise<void>((resolve, reject) => {
+    task.on(
+      "state_changed",
+      (snap) => onProgress?.(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)),
+      reject,
+      () => resolve(),
+    );
+  });
+  return getDownloadURL(ref(storage, path));
+}
+
 // Storage дахь зургуудыг устгана (байхгүй бол алгасна).
 export async function deleteProductImage(paths: {
   imagePath?: string;

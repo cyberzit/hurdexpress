@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import BrandLogo from "@/components/BrandLogo";
 
 interface NavItem {
   label: string;
@@ -55,13 +56,8 @@ export default function AdminSidebar({
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="flex h-16 items-center gap-2.5 border-b border-white/10 px-5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand font-bold text-white">
-            HX
-          </div>
-          <span className="text-lg font-bold tracking-tight">
-            Hurd<span className="text-brand">Express</span>
-          </span>
+        <div className="flex h-16 items-center border-b border-white/10 px-5">
+          <BrandLogo tone="light" />
         </div>
 
         <nav className="space-y-1 px-3 py-4">

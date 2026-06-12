@@ -100,6 +100,18 @@ export default function PartnerOrderForm() {
     }
 
     const product = products.find((p) => p.id === productId);
+
+    // Бараа сонгосон бол боломжит үлдэгдлийг шалгана.
+    if (product) {
+      const available = product.availableQty ?? 0;
+      if (available <= 0) {
+        return setError("Сонгосон бараа дууссан байна.");
+      }
+      if (qtyNum > available) {
+        return setError(`Боломжит үлдэгдэл ${available} ш. Түүнээс илүү захиалах боломжгүй.`);
+      }
+    }
+
     const isCity = address.deliveryType === "city";
     const receiverAddress = buildReceiverAddress(address);
 
@@ -184,8 +196,11 @@ export default function PartnerOrderForm() {
         >
           <option value="">— Сонгох (заавал биш) —</option>
           {products.map((p) => (
-            <option key={p.id} value={p.id}>
+            <option key={p.id} value={p.id} disabled={(p.availableQty ?? 0) <= 0}>
               {p.name} — {p.price.toLocaleString("mn-MN")}₮
+              {(p.availableQty ?? 0) <= 0
+                ? " (дууссан)"
+                : ` (үлд: ${p.availableQty})`}
             </option>
           ))}
         </select>

@@ -231,6 +231,68 @@ function haversineKm(
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
+// Захиалгатай холбоотой агуулахын хөдөлгөөн (reserve/release/out) — атомаар.
+//  - reserve: захиалга үүсэхэд reservedQty += qty
+//  - release: цуцлагдсан/амжилтгүйд reservedQty -= qty
+//  - out: хүргэгдсэнд stockQty -= qty, reservedQty -= qty
+async function applyStockMovement(
+  productId: string,
+  type: "reserve" | "release" | "out",
+  qty: number,
+  orderId: string,
+): Promise<void> {
+  if (!productId || !qty || qty <= 0) return;
+  const productRef = db.doc(`products/${productId}`);
+  const movementRef = db.collection("inventoryMovements").doc();
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(productRef);
+    if (!snap.exists) return;
+    const d = snap.data() || {};
+    const stock = (d.stockQty as number) ?? 0;
+    const reserved = (d.reservedQty as number) ?? 0;
+
+    let newStock = stock;
+    let newReserved = reserved;
+    let beforeQty: number;
+    let afterQty: number;
+
+    if (type === "reserve") {
+      newReserved = reserved + qty;
+      beforeQty = reserved;
+      afterQty = newReserved;
+    } else if (type === "release") {
+      newReserved = Math.max(0, reserved - qty);
+      beforeQty = reserved;
+      afterQty = newReserved;
+    } else {
+      // out (хүргэгдсэн)
+      newStock = Math.max(0, stock - qty);
+      newReserved = Math.max(0, reserved - qty);
+      beforeQty = stock;
+      afterQty = newStock;
+    }
+
+    tx.update(productRef, {
+      stockQty: newStock,
+      reservedQty: newReserved,
+      availableQty: Math.max(0, newStock - newReserved),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    tx.set(movementRef, {
+      productId,
+      companyId: (d.companyId as string) ?? "",
+      type,
+      qty,
+      beforeQty,
+      afterQty,
+      orderId,
+      actorId: "system",
+      actorName: "Систем (авто)",
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  });
+}
+
 // Жолоочийн идэвхтэй захиалгын тоог +/- (0-оос доош болохгүй).
 async function adjustDriverCount(driverId: string, delta: number): Promise<void> {
   const ref = db.doc(`drivers/${driverId}`);
@@ -335,6 +397,15 @@ export const onOrderCreated = onDocumentCreated(
       message: `Таны ${o.orderCode} захиалга HurdExpress хүргэлтэд бүртгэгдлээ.`,
     });
 
+    // Барааны үлдэгдэл түгжих (reserve) — productId-тэй захиалгад.
+    try {
+      if (o.productId) {
+        await applyStockMovement(o.productId, "reserve", o.qty ?? 0, event.params.orderId);
+      }
+    } catch (err) {
+      console.error("reserve stock failed", err);
+    }
+
     // Авто-оноолт (settings.autoAssignEnabled бол). Захиалгыг шинэчлэх нь
     // onOrderUpdated-г өдөөж, тэндээс жолоочид мэдэгдэл + count нэмэгдэнэ.
     try {
@@ -386,12 +457,24 @@ export const onOrderUpdated = onDocumentUpdated(
     // Захиалга дуусгавар болоход (delivered/failed/cancelled) жолоочийн
     // идэвхтэй тоог -1 (load balancing-ийг чөлөөлнө).
     const TERMINAL = ["delivered", "failed", "cancelled"];
-    if (
-      after.driverId &&
-      TERMINAL.includes(after.status) &&
-      !TERMINAL.includes(before.status)
-    ) {
+    const becameTerminal =
+      TERMINAL.includes(after.status) && !TERMINAL.includes(before.status);
+
+    if (after.driverId && becameTerminal) {
       await adjustDriverCount(after.driverId, -1);
+    }
+
+    // Барааны үлдэгдэл: хүргэгдсэн → out (stock-), цуцлагдсан/амжилтгүй → release.
+    if (after.productId && becameTerminal) {
+      try {
+        if (after.status === "delivered") {
+          await applyStockMovement(after.productId, "out", after.qty ?? 0, event.params.orderId);
+        } else {
+          await applyStockMovement(after.productId, "release", after.qty ?? 0, event.params.orderId);
+        }
+      } catch (err) {
+        console.error("stock movement on terminal failed", err);
+      }
     }
 
     // Хүргэгдсэн

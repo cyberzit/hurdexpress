@@ -13,10 +13,20 @@ const settingsRef = () => doc(db, "settings", "general");
 // API key нь public-read settings/general-д БИШ, admin-only settings/sms-д.
 const smsSecretRef = () => doc(db, "settings", "sms");
 
+// Нүүр хуудасны "Бидний тухай" анхдагч текст.
+export const DEFAULT_ABOUT_TEXT =
+  "HurdExpress нь онлайн дэлгүүрүүд болон бизнесийн байгууллагуудын бараа " +
+  "бүтээгдэхүүнийг Улаанбаатар хотын аль ч бүсэд, бүсчлэл үл харгалзан түргэн " +
+  "шуурхай хүргэхээс гадна хөдөө орон нутгийн чиглэлийн унаанд бараа, илгээмжийг " +
+  "найдвартай тавьж өгдөг нэгдсэн хүргэлтийн үйлчилгээний систем юм. Бид хүргэлтийн " +
+  "үйл явцыг хялбарчилж, бизнес эрхлэгчид болон хэрэглэгчдийн цаг хугацаа, зардлыг " +
+  "хэмнэхэд чиглэн ажилладаг.";
+
 // Document байхгүй үед ашиглах анхдагч утгууд.
 export const DEFAULT_SETTINGS: Omit<GeneralSettings, "updatedAt"> = {
   companyName: "",
   brandName: "HurdExpress",
+  aboutText: DEFAULT_ABOUT_TEXT,
   phone: "",
   email: "",
   address: "",
@@ -48,6 +58,7 @@ function mapSettings(data: Record<string, unknown>): GeneralSettings {
   return {
     companyName: (data.companyName as string) ?? "",
     brandName: (data.brandName as string) ?? DEFAULT_SETTINGS.brandName,
+    aboutText: (data.aboutText as string) ?? DEFAULT_ABOUT_TEXT,
     phone: (data.phone as string) ?? "",
     email: data.email as string | undefined,
     address: data.address as string | undefined,
@@ -97,6 +108,7 @@ export async function saveSettings(input: SettingsInput): Promise<void> {
   const payload: Record<string, unknown> = {
     companyName: input.companyName.trim(),
     brandName: input.brandName.trim(),
+    aboutText: input.aboutText.trim(),
     phone: input.phone.trim(),
     defaultDeliveryPrice: input.defaultDeliveryPrice,
     zoneName: input.zoneName.trim(),

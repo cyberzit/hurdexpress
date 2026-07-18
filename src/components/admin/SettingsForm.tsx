@@ -9,7 +9,7 @@ import {
   subscribeSettings,
   type SettingsInput,
 } from "@/lib/settings";
-import { uploadLogo } from "@/lib/imageUpload";
+import { uploadBrochure, uploadLogo, validateBrochureFile } from "@/lib/imageUpload";
 import ImageUpload, { type ImageUploadState } from "@/components/ui/ImageUpload";
 import type { DriverSalaryMode, SmsProvider } from "@/types";
 
@@ -31,6 +31,9 @@ export default function SettingsForm() {
   const [smsApiKey, setSmsApiKey] = useState("");
   const [logo, setLogo] = useState<ImageUploadState>({ file: null, cleared: false });
   const [logoProgress, setLogoProgress] = useState<number | null>(null);
+  const [brochureFile, setBrochureFile] = useState<File | null>(null);
+  const [brochureProgress, setBrochureProgress] = useState<number | null>(null);
+  const [brochureError, setBrochureError] = useState("");
   const hydrated = useRef(false);
 
   // Realtime унших — анх ачаалахад л форм утгыг суулгана (edit-г дарахгүй).
@@ -44,8 +47,12 @@ export default function SettingsForm() {
               brandName: settings.brandName,
               aboutText: settings.aboutText,
               phone: settings.phone,
+              secondaryPhone: settings.secondaryPhone ?? "",
               email: settings.email ?? "",
               address: settings.address ?? "",
+              facebookUrl: settings.facebookUrl ?? "",
+              brochureUrl: settings.brochureUrl ?? "",
+              brochureName: settings.brochureName ?? "",
               defaultDeliveryPrice: settings.defaultDeliveryPrice,
               zoneName: settings.zoneName,
               logoUrl: settings.logoUrl ?? "",
@@ -111,14 +118,29 @@ export default function SettingsForm() {
         logoUrl = "";
       }
 
-      await saveSettings({ ...form, logoUrl });
+      // Танилцуулга (brochure) — шинэ файл бол upload.
+      let brochureUrl = form.brochureUrl ?? "";
+      let brochureName = form.brochureName ?? "";
+      if (brochureFile) {
+        setBrochureProgress(0);
+        const up = await uploadBrochure(brochureFile, setBrochureProgress);
+        brochureUrl = up.url;
+        brochureName = up.name;
+      }
+
+      await saveSettings({ ...form, logoUrl, brochureUrl, brochureName });
       // SMS API key — тусдаа admin-only doc-д.
       await saveSmsApiKey(smsApiKey);
       setLogoProgress(null);
+      setBrochureProgress(null);
+      setBrochureFile(null);
+      // Form-д шинэ brochure утгыг тусгана (дахин hydrate хийхгүй).
+      setForm((f) => ({ ...f, brochureUrl, brochureName }));
       setToast({ type: "success", message: "Тохиргоо хадгалагдлаа." });
     } catch {
       setToast({ type: "error", message: "Хадгалахад алдаа гарлаа." });
       setLogoProgress(null);
+      setBrochureProgress(null);
     } finally {
       setSaving(false);
     }
@@ -178,36 +200,134 @@ export default function SettingsForm() {
           </p>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className={labelClass}>Утас *</label>
-            <input
-              className={inputClass}
-              value={form.phone}
-              onChange={(e) => update("phone", e.target.value)}
-              disabled={saving}
-            />
+        {/* Холбоо барих — нүүр хуудсанд харагдана */}
+        <div className="space-y-4 rounded-xl border border-slate-200 p-4">
+          <h3 className="text-sm font-bold text-navy">📞 Холбоо барих мэдээлэл (нүүр хуудас)</h3>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className={labelClass}>Утас *</label>
+              <input
+                className={inputClass}
+                value={form.phone}
+                onChange={(e) => update("phone", e.target.value)}
+                disabled={saving}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Нэмэлт утас</label>
+              <input
+                className={inputClass}
+                value={form.secondaryPhone ?? ""}
+                onChange={(e) => update("secondaryPhone", e.target.value)}
+                disabled={saving}
+                placeholder="Жишээ: 8804034"
+              />
+            </div>
           </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className={labelClass}>Имэйл</label>
+              <input
+                className={inputClass}
+                type="email"
+                value={form.email ?? ""}
+                onChange={(e) => update("email", e.target.value)}
+                disabled={saving}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Facebook хуудас (URL)</label>
+              <input
+                className={inputClass}
+                value={form.facebookUrl ?? ""}
+                onChange={(e) => update("facebookUrl", e.target.value)}
+                disabled={saving}
+                placeholder="https://www.facebook.com/hurdexpress"
+              />
+            </div>
+          </div>
+
           <div>
-            <label className={labelClass}>Имэйл</label>
+            <label className={labelClass}>Хаяг</label>
             <input
               className={inputClass}
-              type="email"
-              value={form.email ?? ""}
-              onChange={(e) => update("email", e.target.value)}
+              value={form.address ?? ""}
+              onChange={(e) => update("address", e.target.value)}
               disabled={saving}
+              placeholder="БЗД 13-р хороо, Skytown 2 давхар, 209 тоот"
             />
           </div>
         </div>
 
-        <div>
-          <label className={labelClass}>Хаяг</label>
+        {/* Танилцуулга (brochure) — нүүр хуудаснаас татна */}
+        <div className="space-y-3 rounded-xl border border-slate-200 p-4">
+          <h3 className="text-sm font-bold text-navy">📄 Танилцуулга (brochure)</h3>
+          <p className="text-xs text-slate-400">
+            PDF эсвэл зураг оруулна (20MB хүртэл). Нүүр хуудсанд «Танилцуулга татах» товчоор татагдана.
+          </p>
+
+          {form.brochureUrl && !brochureFile && (
+            <div className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2">
+              <a
+                href={form.brochureUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="truncate text-sm font-medium text-brand hover:underline"
+              >
+                📎 {form.brochureName || "Одоогийн танилцуулга"}
+              </a>
+              <button
+                type="button"
+                onClick={() => {
+                  update("brochureUrl", "");
+                  update("brochureName", "");
+                }}
+                disabled={saving}
+                className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50"
+              >
+                Устгах
+              </button>
+            </div>
+          )}
+
           <input
-            className={inputClass}
-            value={form.address ?? ""}
-            onChange={(e) => update("address", e.target.value)}
+            type="file"
+            accept="application/pdf,image/jpeg,image/png,image/webp"
             disabled={saving}
+            onChange={(e) => {
+              const f = e.target.files?.[0] ?? null;
+              if (!f) {
+                setBrochureFile(null);
+                return;
+              }
+              const err = validateBrochureFile(f);
+              if (err) {
+                setBrochureError(err);
+                setBrochureFile(null);
+                return;
+              }
+              setBrochureError("");
+              setBrochureFile(f);
+            }}
+            className="block w-full text-sm text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-navy file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-navy-light"
           />
+          {brochureFile && (
+            <p className="text-xs text-slate-500">
+              Шинэ файл: <span className="font-medium text-navy">{brochureFile.name}</span> — хадгалахад
+              байршина.
+            </p>
+          )}
+          {brochureProgress != null && (
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+              <div
+                className="h-full rounded-full bg-brand transition-all"
+                style={{ width: `${brochureProgress}%` }}
+              />
+            </div>
+          )}
+          {brochureError && <p className="text-sm text-red-600">{brochureError}</p>}
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">

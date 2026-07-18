@@ -31,6 +31,9 @@ export default function CompanyForm({ initial, onClose }: Props) {
     initial ? String(initial.contractPrice) : "6000",
   );
   const [note, setNote] = useState(initial?.note ?? "");
+  const [bankName, setBankName] = useState(initial?.bankName ?? "");
+  const [accountNumber, setAccountNumber] = useState(initial?.accountNumber ?? "");
+  const [accountHolder, setAccountHolder] = useState(initial?.accountHolder ?? "");
   const [isActive, setIsActive] = useState(initial?.isActive ?? true);
 
   // Партнер менежер (зөвхөн шинээр үүсгэх үед).
@@ -64,6 +67,9 @@ export default function CompanyForm({ initial, onClose }: Props) {
       contactPerson,
       contractPrice: price,
       note,
+      bankName: bankName.trim(),
+      accountNumber: accountNumber.trim(),
+      accountHolder: accountHolder.trim() || name.trim(),
       isActive,
     };
 
@@ -247,6 +253,43 @@ export default function CompanyForm({ initial, onClose }: Props) {
                 step={100}
                 value={contractPrice}
                 onChange={(e) => setContractPrice(e.target.value)}
+                disabled={busy}
+              />
+            </div>
+          </div>
+
+          {/* Банкны мэдээлэл — тооцоо шилжүүлэхэд */}
+          <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+            <p className="mb-3 text-sm font-semibold text-navy">🏦 Банкны мэдээлэл</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className={labelClass}>Банкны нэр</label>
+                <input
+                  className={inputClass}
+                  value={bankName}
+                  onChange={(e) => setBankName(e.target.value)}
+                  placeholder="Жишээ: Хаан банк"
+                  disabled={busy}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Дансны дугаар</label>
+                <input
+                  className={inputClass}
+                  value={accountNumber}
+                  onChange={(e) => setAccountNumber(e.target.value)}
+                  inputMode="numeric"
+                  disabled={busy}
+                />
+              </div>
+            </div>
+            <div className="mt-4">
+              <label className={labelClass}>Данс эзэмшигчийн нэр</label>
+              <input
+                className={inputClass}
+                value={accountHolder}
+                onChange={(e) => setAccountHolder(e.target.value)}
+                placeholder="Хоосон бол байгууллагын нэрийг авна"
                 disabled={busy}
               />
             </div>

@@ -27,9 +27,13 @@ export const DEFAULT_SETTINGS: Omit<GeneralSettings, "updatedAt"> = {
   companyName: "",
   brandName: "HurdExpress",
   aboutText: DEFAULT_ABOUT_TEXT,
-  phone: "",
-  email: "",
-  address: "",
+  phone: "89080233",
+  secondaryPhone: "8804034",
+  email: "dayanhurdexpress@gmail.com",
+  address: "БЗД 13-р хороо, Skytown 2 давхар, 209 тоот",
+  facebookUrl: "https://www.facebook.com/hurdexpress",
+  brochureUrl: "",
+  brochureName: "",
   defaultDeliveryPrice: 6000,
   zoneName: "А бүс",
   logoUrl: "",
@@ -60,8 +64,12 @@ function mapSettings(data: Record<string, unknown>): GeneralSettings {
     brandName: (data.brandName as string) ?? DEFAULT_SETTINGS.brandName,
     aboutText: (data.aboutText as string) ?? DEFAULT_ABOUT_TEXT,
     phone: (data.phone as string) ?? "",
+    secondaryPhone: data.secondaryPhone as string | undefined,
     email: data.email as string | undefined,
     address: data.address as string | undefined,
+    facebookUrl: data.facebookUrl as string | undefined,
+    brochureUrl: data.brochureUrl as string | undefined,
+    brochureName: data.brochureName as string | undefined,
     defaultDeliveryPrice:
       (data.defaultDeliveryPrice as number) ?? DEFAULT_SETTINGS.defaultDeliveryPrice,
     zoneName: (data.zoneName as string) ?? DEFAULT_SETTINGS.zoneName,
@@ -125,8 +133,13 @@ export async function saveSettings(input: SettingsInput): Promise<void> {
     updatedAt: serverTimestamp(),
   };
   // Сонголттой талбарууд — хоосон биш бол хадгална.
+  if (input.secondaryPhone?.trim()) payload.secondaryPhone = input.secondaryPhone.trim();
   if (input.email?.trim()) payload.email = input.email.trim();
   if (input.address?.trim()) payload.address = input.address.trim();
+  if (input.facebookUrl?.trim()) payload.facebookUrl = input.facebookUrl.trim();
+  // brochureUrl/Name — хоосон ч хадгалж болно (устгахад "" болгоно).
+  payload.brochureUrl = input.brochureUrl?.trim() ?? "";
+  payload.brochureName = input.brochureName?.trim() ?? "";
   if (input.logoUrl?.trim()) payload.logoUrl = input.logoUrl.trim();
   if (input.primaryColor?.trim()) payload.primaryColor = input.primaryColor.trim();
   if (input.smsApiUrl?.trim()) payload.smsApiUrl = input.smsApiUrl.trim();

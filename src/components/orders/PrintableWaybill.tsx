@@ -10,6 +10,9 @@ export default function PrintableWaybill({ order }: { order: Order }) {
 
   return (
     <div className="mx-auto max-w-[105mm]">
+      {/* Наалтын хуудасны хэмжээ — зөвхөн энэ хуудсанд A6 (globals.css нь A4). */}
+      <style>{"@media print{@page{size:A6;margin:6mm}}"}</style>
+
       {/* Хэвлэх товч — print дээр харагдахгүй */}
       <div className="mb-4 flex justify-end print:hidden">
         <button
@@ -68,13 +71,19 @@ export default function PrintableWaybill({ order }: { order: Order }) {
         {/* Дүн */}
         <div className="mt-2 border-t border-slate-200 pt-2 text-sm">
           <div className="flex justify-between">
-            <span className="text-slate-500">COD</span>
+            <span className="text-slate-500">Барааны үнэ</span>
             <span className="font-semibold">{formatCurrency(order.codAmount)}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-slate-500">Хүргэлт</span>
             <span>{formatCurrency(order.deliveryPrice)}</span>
           </div>
+          {(order.discount ?? 0) > 0 && (
+            <div className="flex justify-between">
+              <span className="text-slate-500">Хөнгөлөлт</span>
+              <span>−{formatCurrency(order.discount ?? 0)}</span>
+            </div>
+          )}
           <div className="mt-1 flex justify-between border-t border-slate-200 pt-1">
             <span className="font-medium">Нийт</span>
             <span className="font-bold">{formatCurrency(order.totalAmount)}</span>

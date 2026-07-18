@@ -58,7 +58,6 @@ export default function PartnerProductTable({ products, onEdit, onToggleActive }
             <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-400">
               <th className="px-4 py-3 font-medium">Зураг</th>
               <th className="px-4 py-3 font-medium">Нэр</th>
-              <th className="px-4 py-3 font-medium">SKU</th>
               <th className="px-4 py-3 font-medium">Үнэ</th>
               <th className="px-4 py-3 font-medium">Үлдэгдэл</th>
               <th className="px-4 py-3 font-medium">Төлөв</th>
@@ -72,7 +71,6 @@ export default function PartnerProductTable({ products, onEdit, onToggleActive }
                   <ProductThumb product={p} />
                 </td>
                 <td className="px-4 py-3 font-medium text-navy">{p.name}</td>
-                <td className="px-4 py-3 text-slate-600">{p.sku || "—"}</td>
                 <td className="px-4 py-3 text-slate-600">{formatCurrency(p.price)}</td>
                 <td className="px-4 py-3">
                   <StockBadge product={p} partner />
@@ -100,7 +98,6 @@ export default function PartnerProductTable({ products, onEdit, onToggleActive }
                 <ProductThumb product={p} className="h-12 w-12 shrink-0" />
                 <div className="min-w-0">
                   <p className="truncate font-medium text-navy">{p.name}</p>
-                  <p className="text-xs text-slate-400">{p.sku || "—"}</p>
                 </div>
               </div>
               <ActiveBtn product={p} onToggleActive={onToggleActive} />

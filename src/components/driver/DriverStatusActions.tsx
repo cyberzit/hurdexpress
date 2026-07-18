@@ -5,19 +5,12 @@ import { driverUpdateOrder } from "@/lib/firebase/orders";
 import { logActivity } from "@/lib/firebase/activity";
 import { useAuth } from "@/contexts/AuthContext";
 import FailedReasonModal from "@/components/driver/FailedReasonModal";
+import DeliverProofModal from "@/components/driver/DeliverProofModal";
+import PaymentCollect from "@/components/driver/PaymentCollect";
 import { ORDER_STATUS_LABELS, type Order, type OrderStatus } from "@/types";
 
+// "Бараа авсан" + "Замдаа" нь нэг "Жолооч хүлээн авсан" toggle болж нэгдсэн.
 const ACTIONS: { status: OrderStatus; label: string; className: string }[] = [
-  {
-    status: "picked_up",
-    label: "Бараа авсан",
-    className: "bg-indigo-600 hover:bg-indigo-700",
-  },
-  {
-    status: "on_the_way",
-    label: "Замдаа",
-    className: "bg-brand hover:bg-brand-dark",
-  },
   {
     status: "delivered",
     label: "Хүргэгдсэн",
@@ -35,9 +28,13 @@ export default function DriverStatusActions({ order }: { order: Order }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState("");
-  const [codCollected, setCodCollected] = useState(order.codCollected ?? false);
+  // Жолооч барааны үнэ + хүргэлтийн үнийг ХАМТ авна.
+  const due = order.totalAmount || (order.codAmount ?? 0) + (order.deliveryPrice ?? 0);
+  const [cash, setCash] = useState(String(order.cashPaid ?? ""));
+  const [transfer, setTransfer] = useState(String(order.transferPaid ?? ""));
   const [note, setNote] = useState(order.driverNote ?? "");
   const [failOpen, setFailOpen] = useState(false);
+  const [deliverOpen, setDeliverOpen] = useState(false);
 
   async function changeStatus(status: OrderStatus) {
     setError("");
@@ -77,7 +74,11 @@ export default function DriverStatusActions({ order }: { order: Order }) {
     setSaved("");
     setBusy(true);
     try {
-      await driverUpdateOrder(order.id, { codCollected, driverNote: note });
+      await driverUpdateOrder(order.id, {
+        cashPaid: order.prepaid ? 0 : Number(cash) || 0,
+        transferPaid: order.prepaid ? 0 : Number(transfer) || 0,
+        driverNote: note,
+      });
       setSaved("Хадгалагдлаа.");
     } catch {
       setError("Хадгалахад алдаа гарлаа.");
@@ -92,41 +93,54 @@ export default function DriverStatusActions({ order }: { order: Order }) {
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
       )}
 
+      {/* "Жолооч хүлээн авсан" toggle нь ЗӨВХӨН захиалгын жагсаалтын карт дээр —
+          энд том товч байвал андуурч дарах эрсдэлтэй. */}
+
       {/* Статус товчнууд */}
       <div className="grid grid-cols-2 gap-3">
         {ACTIONS.map((a) => {
           const current = order.status === a.status;
           const onClick =
-            a.status === "failed" ? () => setFailOpen(true) : () => changeStatus(a.status);
+            a.status === "failed"
+              ? () => setFailOpen(true)
+              : a.status === "delivered"
+                ? () => setDeliverOpen(true)
+                : () => changeStatus(a.status);
+          // Амжилтгүй нь одоогийн төлөв байсан ч дарж засах/буцаах боломжтой байх ёстой.
+          const editable = a.status === "failed";
           return (
             <button
               key={a.status}
               onClick={onClick}
-              disabled={busy || current}
+              disabled={busy || (current && !editable)}
               className={`rounded-2xl px-4 py-5 text-base font-semibold text-white shadow-sm transition disabled:opacity-60 ${a.className} ${
                 current ? "ring-2 ring-navy ring-offset-2" : ""
               }`}
             >
               {a.label}
-              {current && <span className="mt-0.5 block text-xs font-normal">(одоогийн)</span>}
+              {current && (
+                <span className="mt-0.5 block text-xs font-normal">
+                  {editable ? "(одоогийн · засах)" : "(одоогийн)"}
+                </span>
+              )}
             </button>
           );
         })}
       </div>
 
-      {/* COD + тэмдэглэл */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-4">
-        <label className="flex cursor-pointer items-center gap-3">
-          <input
-            type="checkbox"
-            checked={codCollected}
-            onChange={(e) => setCodCollected(e.target.checked)}
-            disabled={busy}
-            className="h-5 w-5 rounded border-slate-300 text-brand focus:ring-brand/30"
-          />
-          <span className="text-sm font-medium text-navy">COD мөнгө авсан</span>
-        </label>
+      {/* Төлбөр */}
+      <PaymentCollect
+        due={due}
+        prepaid={order.prepaid ?? false}
+        cash={cash}
+        transfer={transfer}
+        disabled={busy}
+        onCash={setCash}
+        onTransfer={setTransfer}
+      />
 
+      {/* Тэмдэглэл */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-4">
         <textarea
           value={note}
           onChange={(e) => setNote(e.target.value)}
@@ -142,11 +156,21 @@ export default function DriverStatusActions({ order }: { order: Order }) {
           disabled={busy}
           className="mt-3 w-full rounded-xl border border-navy py-3 text-sm font-semibold text-navy transition hover:bg-navy hover:text-white disabled:opacity-60"
         >
-          {busy ? "Хадгалж байна…" : "COD/тэмдэглэл хадгалах"}
+          {busy ? "Хадгалж байна…" : "Төлбөр / тэмдэглэл хадгалах"}
         </button>
       </div>
 
       {failOpen && <FailedReasonModal order={order} onClose={() => setFailOpen(false)} />}
+      {deliverOpen && (
+        <DeliverProofModal
+          order={order}
+          cashPaid={order.prepaid ? 0 : Number(cash) || 0}
+          transferPaid={order.prepaid ? 0 : Number(transfer) || 0}
+          driverNote={note}
+          onClose={() => setDeliverOpen(false)}
+          onDone={() => setSaved("Хүргэлт баталгаажлаа.")}
+        />
+      )}
     </div>
   );
 }

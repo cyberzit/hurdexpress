@@ -62,12 +62,20 @@ export default function PartnerOrdersPage() {
           <h1 className="text-2xl font-bold text-navy">Миний захиалгууд</h1>
           <p className="mt-1 text-sm text-slate-500">Танай байгууллагын захиалгууд</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {/* Загварыг ил гаргана — модал дотор нуувал хэрэглэгч олдоггүй. */}
+          <a
+            href="/templates/hurdexpress-orders-template.xlsx"
+            download
+            className="rounded-xl border border-slate-200 px-4 py-2.5 text-center text-sm font-medium text-navy transition hover:bg-slate-50"
+          >
+            ⬇ Excel загвар татах
+          </a>
           <Link
             href="/partner/orders/import"
             className="rounded-xl border border-slate-200 px-4 py-2.5 text-center text-sm font-medium text-navy transition hover:bg-slate-50"
           >
-            ⬆ Excel импорт
+            ⬆ Олон захиалга оруулах
           </Link>
           <Link
             href="/partner/orders/new"

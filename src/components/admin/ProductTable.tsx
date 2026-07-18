@@ -40,7 +40,6 @@ export default function ProductTable({ products, onEdit, onToggleActive, onAdjus
             <th className="px-4 py-3 font-medium">Зураг</th>
             <th className="px-4 py-3 font-medium">Байгууллага</th>
             <th className="px-4 py-3 font-medium">Барааны нэр</th>
-            <th className="px-4 py-3 font-medium">SKU</th>
             <th className="px-4 py-3 font-medium">Үнэ</th>
             <th className="px-4 py-3 font-medium">Үлдэгдэл</th>
             <th className="px-4 py-3 font-medium">Төлөв</th>
@@ -58,7 +57,6 @@ export default function ProductTable({ products, onEdit, onToggleActive, onAdjus
               </td>
               <td className="px-4 py-3 text-slate-600">{p.companyName || "—"}</td>
               <td className="px-4 py-3 font-medium text-navy">{p.name}</td>
-              <td className="px-4 py-3 text-slate-600">{p.sku || "—"}</td>
               <td className="px-4 py-3 text-slate-600">
                 {p.price.toLocaleString("mn-MN")}₮
               </td>

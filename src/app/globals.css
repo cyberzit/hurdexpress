@@ -23,7 +23,8 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
 }
 
 /* Keyboard focus — нэвтрэх боломж (accessibility) */
@@ -43,14 +44,32 @@ button:focus-visible,
   padding-top: env(safe-area-inset-top);
 }
 
-/* Хэвлэх (waybill) — A6 хэмжээ, цагаан дэвсгэр */
+/* Хэвлэх — анхдагчаар A4 (тайлан/хүснэгт). Баримтын наалт (waybill) нь өөрөө
+   A6 болгож дарж бичнэ (PrintableWaybill доторх <style>) — @page нь баримтын
+   түвшний тул тухайн хуудсандаа зарлах ёстой. */
 @media print {
   @page {
-    size: A6;
-    margin: 6mm;
+    size: A4 portrait;
+    margin: 10mm;
   }
   body {
     background: #ffffff;
+  }
+  /* Хүснэгтийн мөр хуудас дундуур тасрахгүй, толгой нь хуудас бүрт давтагдана. */
+  table {
+    border-collapse: collapse;
+  }
+  thead {
+    display: table-header-group;
+  }
+  tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  /* Дэвсгэр өнгө (тооцоогүй мөр, статус badge) хэвлэгдэнэ. */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 }
 
@@ -60,4 +79,59 @@ button:focus-visible,
     linear-gradient(to right, rgba(11, 27, 51, 0.05) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(11, 27, 51, 0.05) 1px, transparent 1px);
   background-size: 36px 36px;
+}
+
+/* Landing — anchor (#) дээр зөөлөн гүйлгэх, sticky header-т зай үлдээх */
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 80px;
+}
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* Hero — бараан navy дэвсгэр дээрх grid pattern (цайвар шугам) */
+.bg-grid-light {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Landing анимаци — хөвөх, аажим тод болох */
+@keyframes hx-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+@keyframes hx-float-slow {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-16px); }
+}
+@keyframes hx-pulse-ring {
+  0% { transform: scale(0.85); opacity: 0.7; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+@keyframes hx-fade-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.hx-float { animation: hx-float 4s ease-in-out infinite; }
+.hx-float-slow { animation: hx-float-slow 6s ease-in-out infinite; }
+.hx-fade-up { animation: hx-fade-up 0.6s ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .hx-float, .hx-float-slow, .hx-fade-up { animation: none; }
+}
+
+/* Hero route — зурвасан зам (dashed) дээр гүйх анимаци */
+@keyframes hx-dash {
+  to { stroke-dashoffset: -1000; }
+}
+.hx-route-anim {
+  stroke-dasharray: 10 12;
+  animation: hx-dash 18s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hx-route-anim { animation: none; }
 }

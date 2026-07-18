@@ -28,7 +28,6 @@ export default function ProductForm({ initial, companies, onClose }: Props) {
 
   const [companyId, setCompanyId] = useState(initial?.companyId ?? "");
   const [name, setName] = useState(initial?.name ?? "");
-  const [sku, setSku] = useState(initial?.sku ?? "");
   const [price, setPrice] = useState(initial ? String(initial.price) : "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [isActive, setIsActive] = useState(initial?.isActive ?? true);
@@ -71,7 +70,6 @@ export default function ProductForm({ initial, companies, onClose }: Props) {
       companyId,
       companyName,
       name,
-      sku,
       price: priceNum,
       description,
       isActive,
@@ -178,15 +176,6 @@ export default function ProductForm({ initial, companies, onClose }: Props) {
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className={labelClass}>SKU / барааны код</label>
-              <input
-                className={inputClass}
-                value={sku}
-                onChange={(e) => setSku(e.target.value)}
-                disabled={busy}
-              />
-            </div>
             <div>
               <label className={labelClass}>Үнэ (₮) *</label>
               <input

@@ -61,10 +61,7 @@ export default function ProductsPage() {
     return products.filter((p) => {
       if (companyFilter && p.companyId !== companyFilter) return false;
       if (!q) return true;
-      return (
-        p.name.toLowerCase().includes(q) ||
-        (p.sku ?? "").toLowerCase().includes(q)
-      );
+      return p.name.toLowerCase().includes(q);
     });
   }, [products, search, companyFilter]);
 
@@ -109,7 +106,7 @@ export default function ProductsPage() {
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Барааны нэр эсвэл SKU-аар хайх…"
+          placeholder="Барааны нэрээр хайх…"
           className="w-full max-w-sm rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-navy outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
         />
         <select

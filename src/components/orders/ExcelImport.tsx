@@ -173,11 +173,11 @@ export default function ExcelImport({
               <thead>
                 <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-400">
                   <th className="px-4 py-2 font-medium">#</th>
-                  <th className="px-4 py-2 font-medium">Хүлээн авагч</th>
                   <th className="px-4 py-2 font-medium">Утас</th>
-                  <th className="px-4 py-2 font-medium">Бараа (SKU)</th>
+                  <th className="px-4 py-2 font-medium">Хаяг</th>
+                  <th className="px-4 py-2 font-medium">Бараа</th>
                   <th className="px-4 py-2 font-medium">Тоо</th>
-                  <th className="px-4 py-2 font-medium">COD</th>
+                  <th className="px-4 py-2 font-medium">Барааны үнэ</th>
                   <th className="px-4 py-2 font-medium">Төлөв</th>
                 </tr>
               </thead>
@@ -190,13 +190,17 @@ export default function ExcelImport({
                     }`}
                   >
                     <td className="px-4 py-2 text-slate-400">{i + 1}</td>
-                    <td className="px-4 py-2 text-navy">{r.receiverName || "—"}</td>
-                    <td className="px-4 py-2 text-slate-600">{r.receiverPhone || "—"}</td>
+                    <td className="px-4 py-2 text-navy">{r.receiverPhone || "—"}</td>
                     <td className="px-4 py-2 text-slate-600">
-                      {r.productName || r.productSku || "—"}
+                      <span className="block max-w-[220px] truncate">
+                        {r.cityDistrict ? `${r.cityDistrict}, ${r.addressNote}` : "—"}
+                      </span>
                     </td>
+                    <td className="px-4 py-2 text-slate-600">{r.productName || "—"}</td>
                     <td className="px-4 py-2 text-slate-600">{r.qty || "—"}</td>
-                    <td className="px-4 py-2 text-slate-600">{formatCurrency(r.codAmount)}</td>
+                    <td className="px-4 py-2 text-slate-600">
+                      {r.codAmount != null ? formatCurrency(r.codAmount) : "—"}
+                    </td>
                     <td className="px-4 py-2">
                       {r.ok ? (
                         <span className="text-xs font-medium text-green-600">✓ Зөв</span>

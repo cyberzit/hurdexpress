@@ -120,10 +120,14 @@ service cloud.firestore {
             && request.resource.data.driverId == resource.data.driverId
             && request.resource.data.companyId == resource.data.companyId
             && request.resource.data.diff(resource.data).affectedKeys()
-                 .hasOnly(['status', 'codCollected', 'driverNote',
+                 .hasOnly(['status', 'codCollected', 'cashPaid', 'transferPaid',
+                           'driverNote',
                            'pickedUpAt', 'deliveredAt', 'updatedAt',
-                           'lastDriverLocation',
-                           'failedReason', 'failedAt', 'failedBy']))
+                           'lastDriverLocation', 'deliveryProofs',
+                           'failedReason', 'failedAt', 'failedBy', 'failedProofs',
+                           'failedNote',
+                           'scheduledDate', 'postponedAt', 'postponedNote',
+                           'postponeProofs']))
         // Partner: зөвхөн ӨӨРИЙН PENDING захиалгад
         || (isActivePartner()
             && resource.data.companyId == myCompanyId()
@@ -140,7 +144,10 @@ service cloud.firestore {
                                  'cancelledBy', 'updatedAt']))
             ));
 
-      allow delete: if false;
+      // Устгах — ЗӨВХӨН admin. Устгасан баримт нь partner/driver хоёулангийн
+      // дэлгэцээс нэг зэрэг алга болно (нэг л document). Түгжигдсэн үлдэгдэл,
+      // жолоочийн ачааллын тоог onOrderDeleted функц чөлөөлнө.
+      allow delete: if isAdmin();
     }
 
     // ── settlements / payments ───────────────────────────────
@@ -161,8 +168,11 @@ service cloud.firestore {
     // ── driverSettlements (жолоочийн COD өдөр хаалт) ──────────
     // Жолооч өөрийн тооцоог үүсгэж/илгээнэ; admin батлах/буцаах/тэмдэглэл.
     match /driverSettlements/{id} {
+      // resource == null → баримт хараахан үүсээгүй (анхны өдөр хаалт). Уншихыг
+      // зөвшөөрнө (хоосон буцаана); байгаа баримт зөвхөн эзэн жолоочид нээлттэй.
       allow read: if isAdmin()
-        || (isActiveDriver() && resource.data.driverId == myDriverId());
+        || (isActiveDriver()
+            && (resource == null || resource.data.driverId == myDriverId()));
       allow create: if isAdmin()
         || (isActiveDriver() && request.resource.data.driverId == myDriverId());
       allow update: if isAdmin()

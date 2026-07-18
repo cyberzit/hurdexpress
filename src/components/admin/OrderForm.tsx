@@ -21,13 +21,13 @@ export default function OrderForm() {
   const [companyId, setCompanyId] = useState("");
   const [productId, setProductId] = useState("");
   const [itemName, setItemName] = useState("");
-  const [receiverName, setReceiverName] = useState("");
   const [receiverPhone, setReceiverPhone] = useState("");
   const [receiverAddress, setReceiverAddress] = useState("");
   const [qty, setQty] = useState("1");
   const [codAmount, setCodAmount] = useState("0");
   const [deliveryPrice, setDeliveryPrice] = useState("6000");
   const [note, setNote] = useState("");
+  const [prepaid, setPrepaid] = useState(false);
 
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -61,14 +61,26 @@ export default function OrderForm() {
     setProductId("");
   }
 
-  // Бараа сонгоход нэр болон үнэ (COD) автоматаар бөглөгдөнө.
+  // COD = барааны үнэ × тоо ширхэг. Бараа эсвэл тоо ширхэг өөрчлөгдөх бүрт дахин бодно.
+  // (Бараа сонгоогүй бол гараар оруулсан COD-д хүрэхгүй.)
+  function recalcCod(pid: string, qtyStr: string) {
+    const product = products.find((p) => p.id === pid);
+    if (!product) return;
+    const n = Number(qtyStr);
+    if (!Number.isFinite(n) || n < 1) return;
+    setCodAmount(String(product.price * n));
+  }
+
   function handleProductChange(id: string) {
     setProductId(id);
     const product = products.find((p) => p.id === id);
-    if (product) {
-      setItemName(product.name);
-      setCodAmount(String(product.price));
-    }
+    if (product) setItemName(product.name);
+    recalcCod(id, qty);
+  }
+
+  function handleQtyChange(v: string) {
+    setQty(v);
+    recalcCod(productId, v);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -76,7 +88,6 @@ export default function OrderForm() {
     setError("");
 
     if (!companyId) return setError("Харилцагч байгууллага сонгоно уу.");
-    if (!receiverName.trim()) return setError("Хүлээн авагчийн нэр заавал бөглөнө.");
     if (!receiverPhone.trim()) return setError("Хүлээн авагчийн утас заавал бөглөнө.");
     if (!receiverAddress.trim()) return setError("Хаяг заавал бөглөнө.");
 
@@ -96,15 +107,19 @@ export default function OrderForm() {
     const payload: OrderInput = {
       companyId,
       companyName,
-      receiverName,
+      // Нэрийн талбар маягтаас хасагдсан — хүснэгт/карт хоосон харагдахгүйн тулд
+      // утасны дугаарыг таних тэмдэг болгож хадгална.
+      receiverName: receiverPhone.trim(),
       receiverPhone,
       receiverAddress,
       itemName,
       productId: product?.id,
       productName: product?.name,
+      productImageUrl: product?.thumbnailUrl || product?.photoUrl,
       qty: qtyNum,
       deliveryPrice: deliveryNum,
       codAmount: codNum,
+      prepaid,
       note,
     };
 
@@ -178,25 +193,14 @@ export default function OrderForm() {
       </div>
 
       {/* Хүлээн авагч */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label className={labelClass}>Хүлээн авагчийн нэр *</label>
-          <input
-            className={inputClass}
-            value={receiverName}
-            onChange={(e) => setReceiverName(e.target.value)}
-            disabled={busy}
-          />
-        </div>
-        <div>
-          <label className={labelClass}>Хүлээн авагчийн утас *</label>
-          <input
-            className={inputClass}
-            value={receiverPhone}
-            onChange={(e) => setReceiverPhone(e.target.value)}
-            disabled={busy}
-          />
-        </div>
+      <div>
+        <label className={labelClass}>Хүлээн авагчийн утас *</label>
+        <input
+          className={inputClass}
+          value={receiverPhone}
+          onChange={(e) => setReceiverPhone(e.target.value)}
+          disabled={busy}
+        />
       </div>
 
       <div>
@@ -218,7 +222,7 @@ export default function OrderForm() {
             type="number"
             min={1}
             value={qty}
-            onChange={(e) => setQty(e.target.value)}
+            onChange={(e) => handleQtyChange(e.target.value)}
             disabled={busy}
           />
         </div>
@@ -247,6 +251,25 @@ export default function OrderForm() {
           />
         </div>
       </div>
+
+      {/* Төлбөр төлөгдсөн эсэх — идэвхтэй бол жолооч мөнгө авахгүй */}
+      <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-green-200 bg-green-50 px-4 py-3">
+        <input
+          type="checkbox"
+          checked={prepaid}
+          onChange={(e) => setPrepaid(e.target.checked)}
+          disabled={busy}
+          className="mt-0.5 h-5 w-5 rounded border-slate-300 text-green-600 focus:ring-green-500/30"
+        />
+        <span>
+          <span className="block text-sm font-semibold text-navy">
+            Төлбөр төлөгдсөн
+          </span>
+          <span className="block text-xs text-green-700">
+            Идэвхжүүлбэл жолооч энэ захиалгад мөнгө авахгүй.
+          </span>
+        </span>
+      </label>
 
       <div>
         <label className={labelClass}>Тэмдэглэл</label>

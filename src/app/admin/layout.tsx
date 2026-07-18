@@ -18,7 +18,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         {/* Desktop дээр sidebar-ийн өргөнөөр зай авна */}
         <div className="lg:pl-64 print:pl-0">
           <AdminTopbar onMenuClick={() => setSidebarOpen(true)} />
-          <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+          <main className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
             {children}
           </main>
         </div>

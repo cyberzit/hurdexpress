@@ -24,6 +24,9 @@ export interface CompanyInput {
   contractPrice: number;
   contactPerson?: string;
   note?: string;
+  bankName?: string;
+  accountNumber?: string;
+  accountHolder?: string;
   managerName?: string;
   managerEmail?: string;
   isActive: boolean;
@@ -46,6 +49,9 @@ function mapCompany(id: string, data: Record<string, unknown>): Company {
     contractPrice: (data.contractPrice as number) ?? 0,
     contactPerson: data.contactPerson as string | undefined,
     note: data.note as string | undefined,
+    bankName: data.bankName as string | undefined,
+    accountNumber: data.accountNumber as string | undefined,
+    accountHolder: data.accountHolder as string | undefined,
     managerName: data.managerName as string | undefined,
     managerEmail: data.managerEmail as string | undefined,
     isActive: Boolean(data.isActive),
@@ -68,6 +74,10 @@ function buildDoc(input: CompanyInput): Record<string, unknown> {
   if (input.note?.trim()) out.note = input.note.trim();
   if (input.managerName?.trim()) out.managerName = input.managerName.trim();
   if (input.managerEmail?.trim()) out.managerEmail = input.managerEmail.trim();
+  // Банкны талбарууд — хоосон утгыг ч бичнэ (эс бөгөөс цэвэрлэх боломжгүй болно).
+  out.bankName = input.bankName?.trim() ?? "";
+  out.accountNumber = input.accountNumber?.trim() ?? "";
+  out.accountHolder = input.accountHolder?.trim() ?? "";
   return out;
 }
 

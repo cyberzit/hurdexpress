@@ -154,6 +154,96 @@ export async function uploadLogo(
   return getDownloadURL(ref(storage, path));
 }
 
+export interface UploadedProof {
+  imageUrl: string;
+  imagePath: string;
+}
+
+/**
+ * Хүргэлт / амжилтгүйн баталгаажуулах зураг — webp (max 1200px, q0.8) болгож,
+ * delivery-proofs/{orderId}/{timestamp}.webp (эсвэл failed-proofs/…) зам руу байрлуулна.
+ * Download URL + Storage зам буцаана (Firestore-д хадгална).
+ */
+export async function uploadDeliveryProof(
+  orderId: string,
+  file: File,
+  kind: "delivery" | "failed" = "delivery",
+  onProgress?: (percent: number) => void,
+): Promise<UploadedProof> {
+  const validationError = validateImageFile(file);
+  if (validationError) throw new Error(validationError);
+
+  const ts = Date.now();
+  const webp = await resizeImageToWebP(file, 1200, 1200, 0.8, `proof_${ts}.webp`);
+  const folder = kind === "failed" ? "failed-proofs" : "delivery-proofs";
+  const imagePath = `${folder}/${orderId}/${ts}.webp`;
+
+  const task = uploadBytesResumable(ref(storage, imagePath), webp, {
+    contentType: "image/webp",
+  });
+  await new Promise<void>((resolve, reject) => {
+    task.on(
+      "state_changed",
+      (snap) => onProgress?.(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)),
+      reject,
+      () => resolve(),
+    );
+  });
+
+  const imageUrl = await getDownloadURL(ref(storage, imagePath));
+  return { imageUrl, imagePath };
+}
+
+export interface UploadedBrochure {
+  url: string;
+  name: string;
+  path: string;
+}
+
+const BROCHURE_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+const MAX_BROCHURE_BYTES = 20 * 1024 * 1024; // 20MB
+
+export function validateBrochureFile(file: File): string | null {
+  if (!BROCHURE_TYPES.includes(file.type)) {
+    return "Зөвхөн PDF эсвэл зураг (JPEG, PNG, WebP) оруулна уу.";
+  }
+  if (file.size > MAX_BROCHURE_BYTES) {
+    return "Файлын хэмжээ 20MB-аас ихгүй байх ёстой.";
+  }
+  return null;
+}
+
+/**
+ * Танилцуулга (brochure) — PDF/зургийг хэвээр нь (шахалтгүй) Storage-д байрлуулна.
+ * Зам: branding/brochure_{ts}.{ext}. URL + файлын нэр буцаана (settings-д хадгална).
+ */
+export async function uploadBrochure(
+  file: File,
+  onProgress?: (percent: number) => void,
+): Promise<UploadedBrochure> {
+  const validationError = validateBrochureFile(file);
+  if (validationError) throw new Error(validationError);
+
+  const ts = Date.now();
+  const ext = file.name.split(".").pop()?.toLowerCase() || "pdf";
+  const path = `branding/brochure_${ts}.${ext}`;
+
+  const task = uploadBytesResumable(ref(storage, path), file, {
+    contentType: file.type,
+  });
+  await new Promise<void>((resolve, reject) => {
+    task.on(
+      "state_changed",
+      (snap) => onProgress?.(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)),
+      reject,
+      () => resolve(),
+    );
+  });
+
+  const url = await getDownloadURL(ref(storage, path));
+  return { url, name: file.name, path };
+}
+
 // Storage дахь зургуудыг устгана (байхгүй бол алгасна).
 export async function deleteProductImage(paths: {
   imagePath?: string;

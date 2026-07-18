@@ -50,7 +50,7 @@ export default function PartnerLayout({ children }: { children: ReactNode }) {
           </header>
 
           {/* Mobile дээр bottom nav-д зориулж доор зай үлдээнэ */}
-          <main className="mx-auto max-w-3xl px-4 py-6 pb-24 sm:px-6 lg:pb-8">
+          <main className="mx-auto max-w-[1600px] px-4 py-6 pb-24 sm:px-6 lg:px-8 lg:pb-8">
             {children}
           </main>
         </div>

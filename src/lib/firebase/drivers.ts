@@ -23,6 +23,9 @@ export interface DriverInput {
   plateNumber?: string;
   currentStatus: DriverStatus;
   serviceDistricts?: string[]; // үйлчилдэг дүүргүүд (auto-dispatch matching)
+  bankName?: string;
+  accountNumber?: string;
+  accountHolder?: string;
   loginEmail?: string; // нэвтрэх имэйл (Auth account-тэй бол)
   isActive: boolean;
 }
@@ -53,6 +56,9 @@ function mapDriver(id: string, data: Record<string, unknown>): Driver {
           lng: (data.lastLocation as Record<string, unknown>).lng as number,
         }
       : undefined,
+    bankName: data.bankName as string | undefined,
+    accountNumber: data.accountNumber as string | undefined,
+    accountHolder: data.accountHolder as string | undefined,
     authUid: data.authUid as string | undefined,
     loginEmail: data.loginEmail as string | undefined,
     isActive: Boolean(data.isActive),
@@ -76,7 +82,17 @@ function buildDoc(input: DriverInput): Record<string, unknown> {
     out.serviceDistricts = input.serviceDistricts;
   }
   if (input.loginEmail?.trim()) out.loginEmail = input.loginEmail.trim();
+  // Банкны талбарууд — хоосон утгыг ч бичнэ (эс бөгөөс цэвэрлэх боломжгүй болно).
+  out.bankName = input.bankName?.trim() ?? "";
+  out.accountNumber = input.accountNumber?.trim() ?? "";
+  out.accountHolder = input.accountHolder?.trim() ?? "";
   return out;
+}
+
+// Нэг жолооч (жолооч өөрийнхөө банкны мэдээллийг харахад).
+export async function getDriver(id: string): Promise<Driver | null> {
+  const snap = await getDoc(doc(db, COLLECTION, id));
+  return snap.exists() ? mapDriver(snap.id, snap.data()) : null;
 }
 
 // Real-time жагсаалт (onSnapshot). Unsubscribe буцаана.

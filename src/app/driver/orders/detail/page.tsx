@@ -47,11 +47,15 @@ function DriverOrderDetail() {
 
   return (
     <div>
+      {/* Дарах талбай томтой байх ёстой — жижиг текст холбоос хулганаар онохад хэцүү.
+          scroll={false} — Next нь навигацийн дараа дээш гүйлгэдэг нь жагсаалтын
+          байрлал сэргээхтэй мөргөлдөж, desktop дээр байрлал алдагдаж байсан. */}
       <Link
         href="/driver/orders"
-        className="text-sm font-medium text-slate-500 hover:text-brand"
+        scroll={false}
+        className="-ml-3 inline-flex items-center gap-1.5 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-brand"
       >
-        ← Буцах
+        <span aria-hidden>←</span> Буцах
       </Link>
 
       {/* Том үндсэн товчнууд (driver — touch-friendly) */}
@@ -73,7 +77,7 @@ function DriverOrderDetail() {
       </div>
 
       <div className="mt-4 space-y-4">
-        <OrderDetailCard order={order} />
+        <OrderDetailCard order={order} driverView />
         <DriverStatusActions order={order} />
         <OrderStatusTimeline order={order} />
         <ActivityTimeline orderId={order.id} />

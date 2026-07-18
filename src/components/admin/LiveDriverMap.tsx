@@ -40,30 +40,40 @@ export default function LiveDriverMap() {
     };
   }, []);
 
-  const active = useMemo(
-    () => locations.filter((l) => now - l.updatedAt <= ACTIVE_WINDOW_MS),
-    [locations, now],
-  );
+  // Бүх жолоочийг online/offline-аар нь ялгаж эрэмбэлнэ (online эхэнд).
+  const ranked = useMemo(() => {
+    return [...locations]
+      .map((l) => ({ loc: l, online: now - l.updatedAt <= ACTIVE_WINDOW_MS }))
+      .sort((a, b) => {
+        if (a.online !== b.online) return a.online ? -1 : 1;
+        return b.loc.updatedAt - a.loc.updatedAt;
+      });
+  }, [locations, now]);
 
+  const onlineCount = useMemo(() => ranked.filter((r) => r.online).length, [ranked]);
+
+  // Газрын зураг дээр зөвхөн online жолоочдыг харуулна.
   const markers: MapMarker[] = useMemo(
     () =>
-      active.map((l) => ({
-        id: l.driverId,
-        lat: l.lat,
-        lng: l.lng,
-        title: l.driverName || l.driverId,
-        updatedAt: l.updatedAt,
-        speed: l.speed ?? null,
-      })),
-    [active],
+      ranked
+        .filter((r) => r.online)
+        .map(({ loc: l }) => ({
+          id: l.driverId,
+          lat: l.lat,
+          lng: l.lng,
+          title: l.driverName || l.driverId,
+          updatedAt: l.updatedAt,
+          speed: l.speed ?? null,
+        })),
+    [ranked],
   );
 
   if (!loaded) return <LoadingState />;
-  if (active.length === 0) {
+  if (locations.length === 0) {
     return (
       <EmptyState
         icon="🛰️"
-        title="Идэвхтэй жолооч алга"
+        title="Байршлын мэдээлэл алга"
         description="Жолооч байршил хуваалцаж эхэлмэгц энд харагдана."
       />
     );
@@ -73,25 +83,30 @@ export default function LiveDriverMap() {
     <div className="grid gap-4 lg:grid-cols-5">
       {/* Жагсаалт */}
       <div className="space-y-2 lg:col-span-2">
-        {active.map((l) => (
+        <p className="text-xs text-slate-500">
+          🚚 {onlineCount} online · {locations.length - onlineCount} offline
+        </p>
+        {ranked.map(({ loc: l, online }) => (
           <div
             key={l.driverId}
-            className="rounded-xl border border-slate-200 bg-white px-4 py-3"
+            className={`rounded-xl border bg-white px-4 py-3 ${
+              online ? "border-slate-200" : "border-slate-200 opacity-70"
+            }`}
           >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <p className="font-medium text-navy">{l.driverName || l.driverId}</p>
+                <p className="font-medium text-navy">🚚 {l.driverName || l.driverId}</p>
                 <p className="font-mono text-xs text-slate-500">
                   {l.lat.toFixed(5)}, {l.lng.toFixed(5)}
                 </p>
                 <p className="text-[11px] text-slate-400">{formatDateTime(l.updatedAt)}</p>
-                {l.speed != null && (
+                {online && l.speed != null && (
                   <p className="text-[11px] text-slate-400">
                     {Math.round((l.speed || 0) * 3.6)} км/ц
                   </p>
                 )}
               </div>
-              <Badge tone="green">online</Badge>
+              {online ? <Badge tone="green">online</Badge> : <Badge tone="slate">Сүлжээгүй</Badge>}
             </div>
             <a
               href={`https://www.google.com/maps?q=${l.lat},${l.lng}`}

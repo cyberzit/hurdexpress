@@ -1,164 +1,197 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import ReportCards from "@/components/admin/ReportCards";
-import ReportFilters from "@/components/admin/ReportFilters";
-import ReportTables from "@/components/admin/ReportTables";
-import DriverSettlementReport from "@/components/admin/DriverSettlementReport";
+import AdminCompanyReportFilters from "@/components/admin/reports/AdminCompanyReportFilters";
+import AdminCompanyReportPdfButton from "@/components/admin/reports/AdminCompanyReportPdfButton";
+import AdminCompanyReportSummary from "@/components/admin/reports/AdminCompanyReportSummary";
+import AdminCompanyReportTable from "@/components/admin/reports/AdminCompanyReportTable";
+import EmptyState from "@/components/ui/EmptyState";
 import ErrorState from "@/components/ui/ErrorState";
 import LoadingState from "@/components/ui/LoadingState";
 import { subscribeCompanies } from "@/lib/firebase/companies";
-import { subscribeDrivers } from "@/lib/firebase/drivers";
-import { getOrdersInRange } from "@/lib/firebase/orders";
-import { subscribeDriverSettlements } from "@/lib/firebase/driverSettlement";
+import { subscribeOrdersByCompany } from "@/lib/firebase/orders";
 import {
-  buildCompanyReport,
-  buildDailyReport,
-  buildDriverReport,
-  buildSummary,
-  computeRange,
-  type DateRangeKey,
-} from "@/lib/reports";
-import type { Company, Driver, DriverSettlement, Order, OrderStatus } from "@/types";
+  defaultAdminFilters,
+  filterOrders,
+  sortOrders,
+  summarize,
+  uniqueDrivers,
+  type ReportFilters,
+  type SortDir,
+  type SortKey,
+} from "@/lib/adminCompanyReport";
+import { ORDER_STATUS_LABELS, type Company, type Order } from "@/types";
 
-export default function ReportsPage() {
+export default function AdminReportsPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
-  const [drivers, setDrivers] = useState<Driver[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
-  const [driverSettlements, setDriverSettlements] = useState<DriverSettlement[]>([]);
-  const [loadedSig, setLoadedSig] = useState<string | null>(null);
+  const [loadingOrders, setLoadingOrders] = useState(false);
   const [error, setError] = useState("");
+  const [toast, setToast] = useState("");
 
-  // Filters
-  const [rangeKey, setRangeKey] = useState<DateRangeKey>("month");
-  const [customStart, setCustomStart] = useState("");
-  const [customEnd, setCustomEnd] = useState("");
-  const [companyId, setCompanyId] = useState("");
-  const [driverId, setDriverId] = useState("");
-  const [status, setStatus] = useState<OrderStatus | "">("");
+  const [filters, setFilters] = useState<ReportFilters>(defaultAdminFilters);
+  const [sortKey, setSortKey] = useState<SortKey>("date");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
-  // Filter dropdown-уудын жагсаалт
+  const companyId = filters.companyId ?? "";
+
   useEffect(() => {
-    const u1 = subscribeCompanies((l) => setCompanies(l), () => {});
-    const u2 = subscribeDrivers((l) => setDrivers(l), () => {});
-    const u3 = subscribeDriverSettlements((l) => setDriverSettlements(l), () => {});
-    return () => {
-      u1();
-      u2();
-      u3();
-    };
+    if (!toast) return;
+    const t = setTimeout(() => setToast(""), 4000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  useEffect(() => {
+    const unsub = subscribeCompanies(
+      (list) => setCompanies(list),
+      () => setError("Байгууллагуудыг ачаалахад алдаа гарлаа."),
+    );
+    return () => unsub();
   }, []);
 
-  // Огнооны муж бүрэн эсэх (custom бол 2 огноо шаардлагатай).
-  const rangeSig =
-    rangeKey === "custom" && (!customStart || !customEnd)
-      ? ""
-      : `${rangeKey}|${customStart}|${customEnd}`;
-
-  // loading-г синхрон setState-гүйгээр derived байдлаар тооцно.
-  const loading = rangeSig !== "" && loadedSig !== rangeSig;
-
-  // Огнооны мужид багтах захиалгууд (муж өөрчлөгдөхөд дахин татна)
+  // Байгууллага сонгосон үед л захиалга татна.
+  // where("companyId","==",…) — нэг талбарын шүүлт тул composite index шаардлагагүй.
   useEffect(() => {
-    if (!rangeSig) return;
-    let active = true;
-    const { start, end } = computeRange(rangeKey, customStart, customEnd);
-    getOrdersInRange(start, end)
-      .then((list) => {
-        if (active) {
-          setOrders(list);
-          setError("");
-        }
-      })
-      .catch(() => {
-        if (active) setError("Тайланг ачаалахад алдаа гарлаа.");
-      })
-      .finally(() => {
-        if (active) setLoadedSig(rangeSig);
-      });
-    return () => {
-      active = false;
-    };
-  }, [rangeSig, rangeKey, customStart, customEnd]);
+    if (!companyId) return;
+    const unsub = subscribeOrdersByCompany(
+      companyId,
+      (list) => {
+        setOrders(list);
+        setLoadingOrders(false);
+      },
+      () => {
+        setError("Захиалгыг ачаалахад алдаа гарлаа.");
+        setLoadingOrders(false);
+      },
+    );
+    return () => unsub();
+  }, [companyId]);
 
-  // Company/driver/status — client талд шүүнэ
-  const filtered = useMemo(() => {
-    return orders.filter((o) => {
-      if (companyId && o.companyId !== companyId) return false;
-      if (driverId && o.driverId !== driverId) return false;
-      if (status && o.status !== status) return false;
-      return true;
-    });
-  }, [orders, companyId, driverId, status]);
+  const companyName = companies.find((c) => c.id === companyId)?.name ?? "";
+  // Subscription солигдох хооронд өмнөх байгууллагын мөр харагдахаас сэргийлнэ.
+  const scoped = useMemo(
+    () => (companyId ? orders.filter((o) => o.companyId === companyId) : []),
+    [orders, companyId],
+  );
+  const drivers = useMemo(() => uniqueDrivers(scoped), [scoped]);
 
-  const summary = useMemo(() => buildSummary(filtered), [filtered]);
-  const companyRows = useMemo(() => buildCompanyReport(filtered), [filtered]);
-  const driverRows = useMemo(() => buildDriverReport(filtered), [filtered]);
-  const dailyRows = useMemo(() => buildDailyReport(filtered), [filtered]);
+  // Шүүлтүүрт таарсан БҮХ мөр — PDF энэ жагсаалтыг бүтнээр нь авна.
+  const filtered = useMemo(() => filterOrders(scoped, filters), [scoped, filters]);
+  const sorted = useMemo(
+    () => sortOrders(filtered, sortKey, sortDir),
+    [filtered, sortKey, sortDir],
+  );
+  const summary = useMemo(() => summarize(filtered), [filtered]);
 
-  // Жолоочийн тооцоо — мужид багтаах + driver filter (companyId-д хамаарахгүй).
-  const settlementRows = useMemo(() => {
-    if (!rangeSig) return [];
-    const { start, end } = computeRange(rangeKey, customStart, customEnd);
-    const s = start.getTime();
-    const e = end.getTime();
-    return driverSettlements.filter((x) => {
-      if (x.date < s || x.date > e) return false;
-      if (driverId && x.driverId !== driverId) return false;
-      return true;
-    });
-  }, [driverSettlements, rangeSig, rangeKey, customStart, customEnd, driverId]);
+  const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const pageRows = useMemo(
+    () => sorted.slice((safePage - 1) * pageSize, safePage * pageSize),
+    [sorted, safePage, pageSize],
+  );
+
+  function changeFilters(next: ReportFilters) {
+    // Байгууллага солиход өмнөх өгөгдлийг цэвэрлэж, ачаалж дуустал loading харуулна.
+    if ((next.companyId ?? "") !== companyId) {
+      setOrders([]);
+      setLoadingOrders(Boolean(next.companyId));
+    }
+    setFilters(next);
+    setPage(1);
+  }
+
+  function toggleSort(key: SortKey) {
+    if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else {
+      setSortKey(key);
+      setSortDir(key === "date" ? "desc" : "asc");
+    }
+    setPage(1);
+  }
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-navy">Тайлан</h1>
-      <p className="mt-1 text-sm text-slate-500">Захиалга, орлого, гүйцэтгэлийн тайлан</p>
-
-      <div className="mt-5">
-        <ReportFilters
-          rangeKey={rangeKey}
-          setRangeKey={setRangeKey}
-          customStart={customStart}
-          setCustomStart={setCustomStart}
-          customEnd={customEnd}
-          setCustomEnd={setCustomEnd}
-          companies={companies}
-          companyId={companyId}
-          setCompanyId={setCompanyId}
-          drivers={drivers}
-          driverId={driverId}
-          setDriverId={setDriverId}
-          status={status}
-          setStatus={setStatus}
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-navy">Харилцагч байгууллагын тайлан</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Сонгосон байгууллагын захиалгын дэлгэрэнгүй тайлан
+          </p>
+        </div>
+        <AdminCompanyReportPdfButton
+          disabled={sorted.length === 0}
+          onError={setToast}
+          build={() => ({
+            orders: sorted, // pagination-аас хамаарахгүй
+            companyName: companyName || "—",
+            start: filters.start,
+            end: filters.end,
+            driverName: filters.driverId
+              ? (drivers.find((d) => d.id === filters.driverId)?.name ?? "—")
+              : "Бүх жолооч",
+            statusLabel: filters.status ? ORDER_STATUS_LABELS[filters.status] : "Бүх статус",
+            summary,
+          })}
         />
       </div>
 
-      {error && (
-        <div className="mt-4">
-          <ErrorState message={error} />
-        </div>
+      {toast && (
+        <p className="rounded-xl bg-red-50 px-4 py-2.5 text-sm font-medium text-red-600">
+          {toast}
+        </p>
       )}
 
-      {loading ? (
-        <div className="mt-6">
-          <LoadingState />
-        </div>
+      {error && <ErrorState message={error} />}
+
+      <AdminCompanyReportFilters
+        value={filters}
+        companies={companies}
+        drivers={drivers}
+        onChange={changeFilters}
+      />
+
+      {!companyId ? (
+        <EmptyState
+          icon="🏢"
+          title="Тайлан харахын тулд харилцагч байгууллага сонгоно уу"
+          description="Дээрх жагсаалтаас байгууллагаа сонгосны дараа захиалгын тайлан гарч ирнэ."
+        />
+      ) : loadingOrders ? (
+        <LoadingState />
       ) : (
         <>
-          <div className="mt-6">
-            <ReportCards summary={summary} />
-          </div>
-          <div className="mt-6">
-            <ReportTables
-              companyRows={companyRows}
-              driverRows={driverRows}
-              dailyRows={dailyRows}
+          <AdminCompanyReportSummary
+            summary={summary}
+            companyName={companyName}
+            start={filters.start}
+            end={filters.end}
+          />
+
+          {sorted.length === 0 ? (
+            <EmptyState
+              icon="📄"
+              title="Сонгосон нөхцөлд захиалга алга"
+              description="Огноо, жолооч, статусаа өөрчилж үзнэ үү."
             />
-          </div>
-          <div className="mt-8">
-            <h2 className="mb-3 text-lg font-bold text-navy">Жолоочийн COD тооцоо</h2>
-            <DriverSettlementReport settlements={settlementRows} />
-          </div>
+          ) : (
+            <AdminCompanyReportTable
+              rows={pageRows}
+              totalRows={sorted.length}
+              goodsTotal={summary.goodsTotal}
+              page={safePage}
+              pageSize={pageSize}
+              sortKey={sortKey}
+              sortDir={sortDir}
+              onSort={toggleSort}
+              onPage={setPage}
+              onPageSize={(s) => {
+                setPageSize(s);
+                setPage(1);
+              }}
+            />
+          )}
         </>
       )}
     </div>

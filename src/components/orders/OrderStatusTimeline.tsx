@@ -2,13 +2,8 @@ import Card from "@/components/ui/Card";
 import { ORDER_STATUS_LABELS, type Order, type OrderStatus } from "@/types";
 import { formatDateTime } from "@/lib/format";
 
-const STEPS: OrderStatus[] = [
-  "pending",
-  "assigned",
-  "picked_up",
-  "on_the_way",
-  "delivered",
-];
+// "Замдаа" (on_the_way) нь "Жолооч хүлээн авсан"-д нэгдсэн тул алхам болгож харуулахгүй.
+const STEPS: OrderStatus[] = ["pending", "assigned", "picked_up", "delivered"];
 
 export default function OrderStatusTimeline({ order }: { order: Order }) {
   // failed / cancelled — тусдаа warning.
@@ -35,7 +30,10 @@ export default function OrderStatusTimeline({ order }: { order: Order }) {
     );
   }
 
-  const activeIndex = STEPS.indexOf(order.status);
+  // Хуучин on_the_way төлөвтэй захиалгыг "Жолооч хүлээн авсан" алхам дээр байрлуулна.
+  const activeIndex = STEPS.indexOf(
+    order.status === "on_the_way" ? "picked_up" : order.status,
+  );
   const tsFor = (s: OrderStatus): number | undefined => {
     if (s === "pending") return order.createdAt;
     if (s === "assigned") return order.assignedAt;

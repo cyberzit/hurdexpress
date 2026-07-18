@@ -184,6 +184,109 @@ export function buildMonthlyTrend(
   });
 }
 
+// ── Өдрийн KPI + 7/30 хоногийн трэнд ─────────────────────────
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+export interface DayBucket {
+  dateKey: string; // YYYY-MM-DD
+  label: string; // MM/DD
+  start: number; // ms
+  end: number; // ms
+}
+
+// Өнөөдрөөс ухарсан сүүлийн N хоног (хамгийн эртнийх нь эхэнд).
+export function recentDays(count: number, ref: Date): DayBucket[] {
+  const out: DayBucket[] = [];
+  for (let i = count - 1; i >= 0; i--) {
+    const d = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() - i);
+    const start = d.getTime();
+    const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999).getTime();
+    out.push({
+      dateKey: `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`,
+      label: `${pad2(d.getMonth() + 1)}/${pad2(d.getDate())}`,
+      start,
+      end,
+    });
+  }
+  return out;
+}
+
+export function recentDaysFromNow(count: number): DayBucket[] {
+  return recentDays(count, new Date());
+}
+
+export interface DailyDeliveryPoint {
+  label: string;
+  deliveries: number;
+}
+
+// Өдөр бүрийн хүргэлтийн тоо (deliveredAt-аар).
+export function buildDailyDeliveries(orders: Order[], days: DayBucket[]): DailyDeliveryPoint[] {
+  return days.map((b) => ({
+    label: b.label,
+    deliveries: orders.filter(
+      (o) =>
+        o.status === "delivered" &&
+        o.deliveredAt != null &&
+        o.deliveredAt >= b.start &&
+        o.deliveredAt <= b.end,
+    ).length,
+  }));
+}
+
+export interface DayKpi {
+  delivered: number;
+  failed: number;
+  successRate: number; // 0..100
+  codCollected: number;
+}
+
+// Өнөөдрийн (эсвэл өгөгдсөн өдрийн) KPI.
+export function buildDayKpi(orders: Order[], dayStart: number, dayEnd: number): DayKpi {
+  let delivered = 0;
+  let failed = 0;
+  let codCollected = 0;
+  for (const o of orders) {
+    if (
+      o.status === "delivered" &&
+      o.deliveredAt != null &&
+      o.deliveredAt >= dayStart &&
+      o.deliveredAt <= dayEnd
+    ) {
+      delivered++;
+      codCollected += o.codAmount || 0;
+    } else if (
+      o.status === "failed" &&
+      o.failedAt != null &&
+      o.failedAt >= dayStart &&
+      o.failedAt <= dayEnd
+    ) {
+      failed++;
+    }
+  }
+  return { delivered, failed, successRate: rate(delivered, failed), codCollected };
+}
+
+export function todayRange(ref: Date): { start: number; end: number } {
+  const start = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate()).getTime();
+  const end = new Date(
+    ref.getFullYear(),
+    ref.getMonth(),
+    ref.getDate(),
+    23,
+    59,
+    59,
+    999,
+  ).getTime();
+  return { start, end };
+}
+
+export function todayRangeNow(): { start: number; end: number } {
+  return todayRange(new Date());
+}
+
 // CSV мөрүүд (export).
 export const KPI_CSV_HEADERS = [
   "Жолооч",

@@ -1,42 +1,48 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import DriverSettlementForm from "@/components/settlement/DriverSettlementForm";
+import SettlementReport from "@/components/settlement/SettlementReport";
 import EmptyState from "@/components/ui/EmptyState";
 import LoadingState from "@/components/ui/LoadingState";
 import { useAuth } from "@/contexts/AuthContext";
 import { subscribeOrdersByDriver } from "@/lib/firebase/orders";
+import { getDriver } from "@/lib/firebase/drivers";
 import {
-  computeDayStats,
-  subscribeDriverSettlementDay,
-  todayRange,
+  buildSettlementRows,
+  dateKeyOf,
+  subscribeDriverSettlementsByDriver,
 } from "@/lib/firebase/driverSettlement";
-import { formatCurrency, formatDateTime } from "@/lib/format";
-import type { DriverSettlement, Order } from "@/types";
+import type { Driver, DriverSettlement, Order } from "@/types";
 
-function Card({ label, value, tone }: { label: string; value: string; tone?: string }) {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm">
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className={`mt-1 text-lg font-bold ${tone ?? "text-navy"}`}>{value}</p>
-    </div>
-  );
+const inputClass =
+  "rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-navy outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20";
+
+// Сарын эхэн → өнөөдөр.
+function defaultRange(): { start: string; end: string } {
+  const now = new Date();
+  return {
+    start: dateKeyOf(new Date(now.getFullYear(), now.getMonth(), 1)),
+    end: dateKeyOf(now),
+  };
 }
 
 export default function DriverSettlementPage() {
   const { user, profile } = useAuth();
   const driverId = profile?.driverId ?? user?.uid ?? "";
-  const driverName = profile?.name ?? "";
 
-  const range = useMemo(() => todayRange(), []);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [saved, setSaved] = useState<DriverSettlement[]>([]);
+  const [driver, setDriver] = useState<Driver | null>(null);
   const [loading, setLoading] = useState(true);
-  const [settlement, setSettlement] = useState<DriverSettlement | null>(null);
-  const [formOpen, setFormOpen] = useState(false);
+
+  const [initial] = useState(defaultRange);
+  const [startInput, setStartInput] = useState(initial.start);
+  const [endInput, setEndInput] = useState(initial.end);
+  const [range, setRange] = useState(initial);
 
   useEffect(() => {
     if (!driverId) return;
-    const unsub = subscribeOrdersByDriver(
+    const unsubO = subscribeOrdersByDriver(
       driverId,
       (list) => {
         setOrders(list);
@@ -44,121 +50,83 @@ export default function DriverSettlementPage() {
       },
       () => setLoading(false),
     );
-    const unsubS = subscribeDriverSettlementDay(driverId, range.key, (s) =>
-      setSettlement(s),
-    );
+    const unsubS = subscribeDriverSettlementsByDriver(driverId, setSaved, () => {});
+    getDriver(driverId)
+      .then(setDriver)
+      .catch(() => {});
     return () => {
-      unsub();
+      unsubO();
       unsubS();
     };
-  }, [driverId, range.key]);
+  }, [driverId]);
 
-  const stats = useMemo(() => computeDayStats(orders, range), [orders, range]);
+  const rows = useMemo(
+    () => buildSettlementRows(orders, range.start, range.end),
+    [orders, range],
+  );
 
-  const handedDisplay = settlement ? settlement.handedAmount : stats.cashCollected;
-  const status = settlement?.status ?? "open";
+  const savedByKey = useMemo(() => {
+    const m = new Map<string, DriverSettlement>();
+    for (const s of saved) m.set(s.dateKey, s);
+    return m;
+  }, [saved]);
 
   if (loading) return <LoadingState />;
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-bold text-navy">Өдрийн тооцоо</h1>
-        <p className="mt-0.5 text-sm text-slate-500">
-          Өнөөдөр цуглуулсан COD болон тушаах дүн
-        </p>
-      </div>
-
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 gap-3">
-        <Card label="Өнөөдрийн хүргэлт" value={String(stats.deliveredOrders)} />
-        <Card label="COD нийт" value={formatCurrency(stats.codCollected)} />
-        <Card label="Бэлэн мөнгө" value={formatCurrency(stats.cashCollected)} tone="text-green-600" />
-        <Card label="Тушаах дүн" value={formatCurrency(handedDisplay)} tone="text-brand" />
-      </div>
-
-      {/* Status / action */}
-      {status === "approved" ? (
-        <div className="rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-          ✓ Өнөөдрийн тооцоо батлагдсан. Зөрүү: {formatCurrency(settlement?.differenceAmount ?? 0)}
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
+        <div>
+          <h1 className="text-xl font-bold text-navy">Тооцооны тайлан</h1>
+          <p className="mt-0.5 text-sm text-slate-500">
+            Хүргэсэн өдрөөр — тооцоог админ хянаж нийлүүлнэ
+          </p>
         </div>
-      ) : status === "submitted" ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-          ⏳ Тооцоо илгээгдсэн, админ батлахыг хүлээж байна.
-          <button
-            onClick={() => setFormOpen(true)}
-            className="ml-2 font-semibold underline"
-          >
-            Засах
-          </button>
-        </div>
-      ) : (
         <button
-          onClick={() => setFormOpen(true)}
-          disabled={stats.deliveredOrders === 0}
-          className="w-full rounded-2xl bg-brand py-4 text-base font-bold text-white shadow-sm transition hover:bg-brand-dark disabled:opacity-50"
+          onClick={() => window.print()}
+          className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-navy transition hover:bg-slate-50"
         >
-          🔒 Өдөр хаах
+          🖨 Хэвлэх
         </button>
-      )}
-      {settlement?.note && (
-        <p className="rounded-xl bg-slate-50 px-4 py-2.5 text-sm text-slate-600">
-          📝 {settlement.note}
-        </p>
-      )}
+      </div>
 
-      {/* Today's delivered orders */}
-      <div>
-        <p className="mb-2 text-sm font-semibold text-navy">
-          Өнөөдрийн хүргэлтүүд ({stats.delivered.length})
-        </p>
-        {stats.delivered.length === 0 ? (
-          <EmptyState icon="📦" title="Өнөөдөр хүргэсэн захиалга алга" />
+      {/* Огнооны муж */}
+      <div className="mt-4 flex flex-wrap items-end gap-3 print:hidden">
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-500">Эхлэх</label>
+          <input
+            type="date"
+            value={startInput}
+            max={endInput}
+            onChange={(e) => setStartInput(e.target.value)}
+            className={inputClass}
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-500">Дуусах</label>
+          <input
+            type="date"
+            value={endInput}
+            min={startInput}
+            onChange={(e) => setEndInput(e.target.value)}
+            className={inputClass}
+          />
+        </div>
+        <button
+          onClick={() => setRange({ start: startInput, end: endInput })}
+          className="rounded-lg bg-brand px-5 py-1.5 text-sm font-semibold text-white transition hover:bg-brand-dark"
+        >
+          Хайх
+        </button>
+      </div>
+
+      <div className="mt-5">
+        {rows.length === 0 ? (
+          <EmptyState icon="📭" title="Энэ хугацаанд хүргэлт алга" />
         ) : (
-          <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <table className="w-full min-w-[520px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-400">
-                  <th className="px-3 py-2.5 font-medium">Код</th>
-                  <th className="px-3 py-2.5 font-medium">Хүлээн авагч</th>
-                  <th className="px-3 py-2.5 font-medium">COD</th>
-                  <th className="px-3 py-2.5 font-medium">Хүргэлт</th>
-                  <th className="px-3 py-2.5 font-medium">Хүргэсэн</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stats.delivered.map((o) => (
-                  <tr key={o.id} className="border-b border-slate-100 last:border-0">
-                    <td className="px-3 py-2.5 font-mono font-semibold text-navy">
-                      {o.orderCode}
-                    </td>
-                    <td className="px-3 py-2.5 text-slate-600">{o.receiverName}</td>
-                    <td className="px-3 py-2.5 text-slate-600">{formatCurrency(o.codAmount)}</td>
-                    <td className="px-3 py-2.5 text-slate-600">{formatCurrency(o.deliveryPrice)}</td>
-                    <td className="px-3 py-2.5 text-xs text-slate-500">
-                      {formatDateTime(o.deliveredAt)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <SettlementReport rows={rows} savedByKey={savedByKey} driver={driver} />
         )}
       </div>
-
-      {formOpen && (
-        <DriverSettlementForm
-          driverId={driverId}
-          driverName={driverName}
-          dateKey={range.key}
-          dateMs={range.start.getTime()}
-          totalOrders={stats.totalOrders}
-          deliveredOrders={stats.deliveredOrders}
-          codCollected={stats.codCollected}
-          cashCollected={stats.cashCollected}
-          onClose={() => setFormOpen(false)}
-        />
-      )}
     </div>
   );
 }

@@ -39,6 +39,15 @@ export function todayRange(): { start: Date; end: Date; key: string } {
   return { start, end, key: dateKeyOf(start) };
 }
 
+// "YYYY-MM-DD" түлхүүрээс тухайн өдрийн муж (local). Тооцоог тодорхой өдрөөр
+// хаахад ашиглана — өнөөдөрт хатуу уяхгүй.
+export function rangeOfKey(key: string): { start: Date; end: Date; key: string } {
+  const [y, m, d] = key.split("-").map(Number);
+  const start = new Date(y, m - 1, d);
+  const end = new Date(y, m - 1, d, 23, 59, 59, 999);
+  return { start, end, key };
+}
+
 // Жолоочийн нэг өдрийн статистик (delivered/failed-аас).
 export interface DayStats {
   delivered: Order[];
@@ -77,6 +86,79 @@ export function computeDayStats(
   };
 }
 
+// ── Тооцооны тайлан (admin) ────────────────────────────────────────────────
+// Мөр бүр = нэг өдөр. Захиалгыг ХҮРГЭСЭН огноогоор (deliveredAt) бүлэглэнэ.
+export interface SettlementDayRow {
+  dateKey: string; // YYYY-MM-DD
+  dateMs: number;
+  deliveredCount: number;
+  codTotal: number; // Нийт — захиалгын дүн (урьдчилж төлөгдсөнийг оруулаад)
+  cashTotal: number; // Жолооч бэлнээр авсан
+  transferTotal: number; // Жолоочийн ДАНС РУУ шилжүүлсэн
+  collected: number; // Жолоочид орсон нийт мөнгө = cash + transfer
+  deliveryTotal: number; // Хүргэлт — жолоочийн олговор
+  payable: number; // Тушаах дүн = collected - deliveryTotal
+}
+
+// Хугацааны мужид хамаарах өдрүүдийг захиалгаас гаргана (хүргэлт байсан өдрүүд).
+export function buildSettlementRows(
+  orders: Order[],
+  startKey: string,
+  endKey: string,
+): SettlementDayRow[] {
+  const byDay = new Map<string, SettlementDayRow>();
+
+  for (const o of orders) {
+    if (o.status !== "delivered" || o.deliveredAt == null) continue;
+    const key = dateKeyOf(new Date(o.deliveredAt));
+    if (key < startKey || key > endKey) continue;
+
+    let row = byDay.get(key);
+    if (!row) {
+      row = {
+        dateKey: key,
+        dateMs: rangeOfKey(key).start.getTime(),
+        deliveredCount: 0,
+        codTotal: 0,
+        cashTotal: 0,
+        transferTotal: 0,
+        collected: 0,
+        deliveryTotal: 0,
+        payable: 0,
+      };
+      byDay.set(key, row);
+    }
+    // Жолооч барааны үнэ + хүргэлтийн үнийг ХАМТ авдаг тул "Нийт" нь totalAmount.
+    const dueTotal = o.totalAmount || (o.codAmount || 0) + (o.deliveryPrice || 0);
+
+    row.deliveredCount++;
+    row.codTotal += dueTotal;
+    row.deliveryTotal += o.deliveryPrice || 0;
+
+    // Бэлэн ч, шилжүүлэг ч ЖОЛООЧИД орно (шилжүүлэг нь жолоочийн данс руу),
+    // тиймээс хоёуланг нь байгууллагад тушаана. Урьдчилж төлөгдсөн захиалгад
+    // жолооч юу ч аваагүй тул тушаах зүйлгүй — гэхдээ цалингаа авна.
+    // Хуучин өгөгдөл (cashPaid/transferPaid байхгүй): codCollected=true бол
+    // бүтнээр нь бэлнээр авсан гэж үзнэ.
+    const legacy = o.cashPaid == null && o.transferPaid == null;
+    const cash = legacy
+      ? o.prepaid
+        ? 0
+        : o.codCollected
+          ? dueTotal
+          : 0
+      : (o.cashPaid ?? 0);
+    const transfer = legacy ? 0 : (o.transferPaid ?? 0);
+
+    row.cashTotal += cash;
+    row.transferTotal += transfer;
+    row.collected += cash + transfer;
+  }
+
+  for (const row of byDay.values()) row.payable = row.collected - row.deliveryTotal;
+  return Array.from(byDay.values()).sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+}
+
 function mapDriverSettlement(id: string, data: Record<string, unknown>): DriverSettlement {
   return {
     id,
@@ -90,6 +172,11 @@ function mapDriverSettlement(id: string, data: Record<string, unknown>): DriverS
     cashCollected: (data.cashCollected as number) ?? 0,
     handedAmount: (data.handedAmount as number) ?? 0,
     differenceAmount: (data.differenceAmount as number) ?? 0,
+    deliveryTotal: data.deliveryTotal as number | undefined,
+    payable: data.payable as number | undefined,
+    reconciled: Boolean(data.reconciled),
+    reconciledAt: data.reconciledAt ? toMillis(data.reconciledAt) : undefined,
+    reconciledBy: data.reconciledBy as string | undefined,
     status: (data.status as DriverSettlementStatus) ?? "open",
     submittedAt: data.submittedAt ? toMillis(data.submittedAt) : undefined,
     approvedAt: data.approvedAt ? toMillis(data.approvedAt) : undefined,
@@ -215,6 +302,44 @@ export async function rejectDriverSettlement(id: string, note?: string): Promise
 }
 
 // Admin — тэмдэглэл нэмэх/засах.
+// Admin өдрийн тооцоог "нийлсэн" гэж тэмдэглэх / тайлбар бичих.
+// Баримт байхгүй бол үүсгэнэ (setDoc merge) — жолооч өдөр хаах шаардлагагүй.
+export async function reconcileDriverDay(input: {
+  driverId: string;
+  driverName: string;
+  dateKey: string;
+  dateMs: number;
+  reconciled: boolean;
+  note?: string;
+  actorUid: string;
+  codTotal: number;
+  deliveryTotal: number;
+  payable: number;
+  deliveredOrders: number;
+}): Promise<void> {
+  const id = docId(input.driverId, input.dateKey);
+  await setDoc(
+    doc(db, COLLECTION, id),
+    {
+      driverId: input.driverId,
+      driverName: input.driverName,
+      date: Timestamp.fromMillis(input.dateMs),
+      dateKey: input.dateKey,
+      deliveredOrders: input.deliveredOrders,
+      codCollected: input.codTotal,
+      deliveryTotal: input.deliveryTotal,
+      payable: input.payable,
+      reconciled: input.reconciled,
+      status: input.reconciled ? "approved" : "open",
+      note: input.note?.trim() ?? "",
+      reconciledAt: input.reconciled ? serverTimestamp() : null,
+      reconciledBy: input.reconciled ? input.actorUid : null,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
+}
+
 export async function setDriverSettlementNote(id: string, note: string): Promise<void> {
   await updateDoc(doc(db, COLLECTION, id), {
     note: note.trim(),

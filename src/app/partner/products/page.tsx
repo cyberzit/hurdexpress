@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import PartnerProductForm from "@/components/partner/PartnerProductForm";
+import ProductExcelImport from "@/components/partner/ProductExcelImport";
+import { downloadTemplate } from "@/lib/importProducts";
 import PartnerProductTable from "@/components/partner/PartnerProductTable";
 import Button from "@/components/ui/Button";
 import EmptyState from "@/components/ui/EmptyState";
@@ -25,6 +27,8 @@ export default function PartnerProductsPage() {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [imported, setImported] = useState(0);
   const [editing, setEditing] = useState<Product | null>(null);
 
   // Байгууллагын нэр (product дээр denormalize хийхэд)
@@ -55,9 +59,7 @@ export default function PartnerProductsPage() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return products;
-    return products.filter(
-      (p) => p.name.toLowerCase().includes(q) || (p.sku ?? "").toLowerCase().includes(q),
-    );
+    return products.filter((p) => p.name.toLowerCase().includes(q));
   }, [products, search]);
 
   function openAdd() {
@@ -83,14 +85,37 @@ export default function PartnerProductsPage() {
           <h1 className="text-2xl font-bold text-navy">Миний бараа</h1>
           <p className="mt-1 text-sm text-slate-500">{companyName}</p>
         </div>
-        <Button onClick={openAdd}>+ Шинэ бараа нэмэх</Button>
+        <div className="flex flex-wrap gap-2">
+          {/* Загварыг ил гаргана — модал дотор нуувал хэрэглэгч олдоггүй. */}
+          <button
+            type="button"
+            onClick={downloadTemplate}
+            className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-navy transition hover:bg-slate-50"
+          >
+            ⬇ Excel загвар татах
+          </button>
+          <button
+            type="button"
+            onClick={() => setImportOpen(true)}
+            className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-navy transition hover:bg-slate-50"
+          >
+            ⬆ Олон бараа оруулах
+          </button>
+          <Button onClick={openAdd}>+ Шинэ бараа нэмэх</Button>
+        </div>
       </div>
+
+      {imported > 0 && (
+        <p className="mt-3 rounded-xl bg-green-50 px-4 py-2.5 text-sm font-medium text-green-700">
+          ✓ {imported} бараа амжилттай орууллаа.
+        </p>
+      )}
 
       <div className="mt-5">
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Нэр эсвэл SKU-аар хайх…"
+          placeholder="Барааны нэрээр хайх…"
           className="w-full max-w-sm rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-navy outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
         />
       </div>
@@ -118,6 +143,16 @@ export default function PartnerProductsPage() {
           />
         )}
       </div>
+
+      {importOpen && (
+        <ProductExcelImport
+          companyId={companyId}
+          companyName={companyName}
+          existing={products}
+          onClose={() => setImportOpen(false)}
+          onDone={(n) => setImported(n)}
+        />
+      )}
 
       {formOpen && (
         <PartnerProductForm

@@ -7,6 +7,29 @@
         "source": "**",
         "destination": "/index.html"
       }
+    ],
+    "headers": [
+      {
+        "//": "Анхдагчаар кэшлэхгүй. Firebase-ийн default нь max-age=3600 тул deploy хийсэн ч хэрэглэгч 1 цаг хүртэл хуучин хувилбар хардаг байсан. Хуудсын зам (/partner/orders/) нь .html-ээр төгсдөггүй тул ** ашиглана.",
+        "source": "**",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        ]
+      },
+      {
+        "//": "Хэш нэртэй асset-ууд — үүрд кэшлэнэ (агуулга солигдвол нэр нь солигдоно). Сүүлийн тохирох дүрэм давамгайлна.",
+        "source": "/_next/static/**",
+        "headers": [
+          { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+        ]
+      },
+      {
+        "//": "Excel загвар — шинэчилсэн үед шууд шинэ нь татагдана.",
+        "source": "/templates/**",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, must-revalidate" }
+        ]
+      }
     ]
   },
   "functions": [

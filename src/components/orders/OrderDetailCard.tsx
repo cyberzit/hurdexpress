@@ -1,4 +1,5 @@
 import StatusBadge from "@/components/admin/StatusBadge";
+import ProductImageViewer from "@/components/orders/ProductImageViewer";
 import Card from "@/components/ui/Card";
 import { formatCurrency } from "@/lib/format";
 import { DELIVERY_TYPE_LABELS, type Order } from "@/types";
@@ -23,11 +24,16 @@ function OptRow({ label, value }: { label: string; value?: string }) {
 export default function OrderDetailCard({
   order,
   hideDeliveryFee = false,
+  driverView = false,
 }: {
   order: Order;
   hideDeliveryFee?: boolean;
+  // driverView — жолоочид зөвхөн "Авах төлбөр" (бараа + хүргэлт нийлбэр) харагдана.
+  driverView?: boolean;
 }) {
   const item = order.productName || order.itemName || "—";
+  const items = order.items ?? [];
+  const hasItems = items.length > 0;
   const mapsUrl = order.location
     ? `https://www.google.com/maps?q=${order.location.lat},${order.location.lng}`
     : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.receiverAddress)}`;
@@ -44,6 +50,18 @@ export default function OrderDetailCard({
         </div>
         <StatusBadge status={order.status} />
       </div>
+
+      {/* Жолооч хойшлуулсан бол — аль өдөр рүү шилжсэн, шалтгаан нь юу вэ. */}
+      {order.scheduledDate && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-sm font-bold text-amber-800">
+            📅 Хойшлуулсан · {order.scheduledDate}
+          </p>
+          {order.postponedNote && (
+            <p className="mt-0.5 text-xs text-amber-700">{order.postponedNote}</p>
+          )}
+        </div>
+      )}
 
       {/* Хүлээн авагч */}
       <Card>
@@ -108,18 +126,97 @@ export default function OrderDetailCard({
 
       {/* Бараа + дүн */}
       <Card>
-        <Row label="Бараа" value={item} />
-        <div className="mt-2">
-          <Row label="Тоо ширхэг" value={order.qty} />
-        </div>
-        <div className="mt-2">
-          <Row label="COD дүн" value={formatCurrency(order.codAmount)} />
-        </div>
-        {!hideDeliveryFee && (
+        {/* Нэг бараатай захиалгад л том зураг — олон бараатайд мөр бүрд нь гарна. */}
+        {order.productImageUrl && !hasItems && (
+          <div className="mb-3 flex items-center gap-3">
+            <ProductImageViewer url={order.productImageUrl} alt={item} />
+            <p className="text-sm font-medium text-navy">{item}</p>
+          </div>
+        )}
+        {hasItems ? (
+          /* Олон бараатай захиалга — мөр бүрээр задалж харуулна. */
+          <div className="space-y-1.5">
+            <p className="text-sm text-slate-500">Бараанууд</p>
+            {items.map((it, i) => (
+              <div
+                key={`${it.productId ?? it.productName}-${i}`}
+                className="flex items-center gap-2.5 border-b border-slate-100 py-1.5 text-sm last:border-0"
+              >
+                {it.productImageUrl ? (
+                  <ProductImageViewer url={it.productImageUrl} alt={it.productName} small />
+                ) : (
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-base">
+                    📦
+                  </span>
+                )}
+                <span className="min-w-0 flex-1 font-medium text-navy">
+                  {it.productName}
+                  <span className="ml-1.5 text-slate-400">×{it.qty}</span>
+                </span>
+                <span className="whitespace-nowrap text-slate-600">
+                  {formatCurrency(it.subtotal)}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <>
+            <Row label="Бараа" value={item} />
+            <div className="mt-2">
+              <Row label="Тоо ширхэг" value={order.qty} />
+            </div>
+          </>
+        )}
+        {/* Жолоочид задаргаа хэрэггүй — зөвхөн авах нийт төлбөр. */}
+        {driverView ? (
+          <div className="mt-3 border-t border-slate-100 pt-2">
+            <Row
+              label="Авах төлбөр"
+              value={
+                order.prepaid ? (
+                  <span className="font-bold text-green-700">Төлөгдсөн</span>
+                ) : (
+                  <span className="text-base font-bold text-navy">
+                    {formatCurrency(order.totalAmount)}
+                  </span>
+                )
+              }
+            />
+          </div>
+        ) : (
+          <div className="mt-2">
+            <Row
+              label="Төлбөрийн дүн"
+              value={
+                order.prepaid ? (
+                  <span className="text-green-700">
+                    {formatCurrency(order.codAmount)} · төлөгдсөн
+                  </span>
+                ) : (
+                  formatCurrency(order.codAmount)
+                )
+              }
+            />
+          </div>
+        )}
+        {!hideDeliveryFee && !driverView && (
           <>
             <div className="mt-2">
               <Row label="Хүргэлтийн үнэ" value={formatCurrency(order.deliveryPrice)} />
             </div>
+            {/* Хөнгөлөлт нийт дүнгээс хасагдсан — ил харуулахгүй бол тоо зөрж харагдана. */}
+            {(order.discount ?? 0) > 0 && (
+              <div className="mt-2">
+                <Row
+                  label="Хөнгөлөлт"
+                  value={
+                    <span className="text-red-600">
+                      −{formatCurrency(order.discount ?? 0)}
+                    </span>
+                  }
+                />
+              </div>
+            )}
             <div className="mt-3 border-t border-slate-100 pt-2">
               <Row
                 label="Нийт дүн"

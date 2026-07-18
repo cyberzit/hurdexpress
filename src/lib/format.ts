@@ -27,6 +27,25 @@ export function formatDate(ms: number | null | undefined): string {
   });
 }
 
+// Тайлан/PDF-д зориулсан ISO хэлбэр — "2026-07-18".
+// (formatDate нь locale-аас хамаарч "2026/07/18" гэж гардаг тул тайланд тогтвортой биш.)
+export function formatDateISO(ms: number | null | undefined): string {
+  if (!ms) return "—";
+  const d = new Date(ms);
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
+// "2026-07-18 17:30"
+export function formatDateTimeISO(ms: number | null | undefined): string {
+  if (!ms) return "—";
+  const d = new Date(ms);
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${formatDateISO(ms)} ${hh}:${mm}`;
+}
+
 // Утас mask — "••••2233" (зөвхөн сүүлийн 4 орон)
 export function formatPhoneMask(phone: string | null | undefined): string {
   const digits = (phone ?? "").replace(/\D/g, "");

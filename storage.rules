@@ -10,12 +10,19 @@ service firebase.storage {
         && request.resource.contentType.matches('image/.*');
     }
 
-    // Брэндийн лого: branding/{fileName} — нийтэд read, нэвтэрсэн (admin UI) write.
+    // Брэндийн лого + танилцуулга (brochure): branding/{fileName}
+    //  - read: нийтэд нээлттэй (лого/танилцуулга сайт дээр харагдана)
+    //  - write: нэвтэрсэн (admin UI) — зураг (5MB) эсвэл PDF (20MB).
     match /branding/{fileName} {
       allow read: if true;
       allow write: if request.auth != null
-        && request.resource.size < 5 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
+        && (
+          (request.resource.contentType.matches('image/.*')
+            && request.resource.size < 5 * 1024 * 1024)
+          || (request.resource.contentType == 'application/pdf'
+            && request.resource.size < 20 * 1024 * 1024)
+        );
+      allow delete: if request.auth != null;
     }
 
     // Барааны зураг: products/{companyId}/{productId}/{fileName}
@@ -29,6 +36,23 @@ service firebase.storage {
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
       allow delete: if request.auth != null;
+    }
+
+    // Хүргэлт / амжилтгүйн баталгаажуулах зураг:
+    //  - delivery-proofs/{orderId}/{fileName} · failed-proofs/{orderId}/{fileName}
+    //  - read: зөвхөн нэвтэрсэн (admin detail хуудас, жолооч) — public БИШ (хувийн мэдээлэл).
+    //  - write: нэвтэрсэн жолооч/admin, зөвхөн зураг, шахсан webp тул 5MB-аас бага.
+    match /delivery-proofs/{orderId}/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+    match /failed-proofs/{orderId}/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
     }
   }
 }

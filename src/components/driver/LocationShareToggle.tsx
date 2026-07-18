@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { pushDriverLocation } from "@/lib/firebase/locations";
 
 interface Props {
@@ -9,20 +9,53 @@ interface Props {
   hasActiveOrders: boolean;
 }
 
-// watchPosition-г зөв (батарей хэмнэх) ашиглах зарчмууд:
-//  - enableHighAccuracy: false → GPS-ийн оронд сүлжээ/Wi-Fi (бага эрчим хүч).
-//  - watchPosition олон удаа дуудагдаж болох тул Firestore бичилтийг 25 сек тутамд
-//    нэг удаа throttle хийнэ (дата/бичилт хэмнэнэ).
-//  - maximumAge → саяхны кэшлэсэн байршлыг зөвшөөрнө.
+// watchPosition-г ашиглах зарчмууд:
+//  - Live tracking — Firestore бичилтийг 25 сек тутамд нэг удаа throttle хийнэ.
+//    (бичилт цөөн = төлбөр бага; амьд хяналт хадгалагдана.)
+//  - maximumAge: 25000 → 25 секундээс хуучин кэш авахгүй (батарей хэмнэнэ).
 //  - Зөвхөн active order байх үед, toggle унтраахад clearWatch.
 const THROTTLE_MS = 25000;
+
+// Toggle-ийн төлөвийг localStorage-д хадгална. Эс бөгөөс захиалгын дэлгэрэнгүй рүү
+// шилжээд буцахад компонент дахин mount болж, унтраалттай болчихдог.
+const STORAGE_KEY = "hx:driver:locationShare";
+
+// useSyncExternalStore-оор уншина: static export-ийн prerender үед getServerSnapshot
+// (false) ашиглагдаж, hydration дууссаны дараа бодит утга руу шилжинэ.
+const listeners = new Set<() => void>();
+
+function subscribeShare(cb: () => void) {
+  listeners.add(cb);
+  window.addEventListener("storage", cb); // өөр таб дээр солигдвол
+  return () => {
+    listeners.delete(cb);
+    window.removeEventListener("storage", cb);
+  };
+}
+
+function getShare(): boolean {
+  try {
+    return localStorage.getItem(STORAGE_KEY) === "1";
+  } catch {
+    return false; // private mode
+  }
+}
+
+function setShare(value: boolean) {
+  try {
+    localStorage.setItem(STORAGE_KEY, value ? "1" : "0");
+  } catch {
+    /* алгасна */
+  }
+  listeners.forEach((l) => l());
+}
 
 export default function LocationShareToggle({
   driverId,
   driverName,
   hasActiveOrders,
 }: Props) {
-  const [enabled, setEnabled] = useState(false);
+  const enabled = useSyncExternalStore(subscribeShare, getShare, () => false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -60,7 +93,7 @@ export default function LocationShareToggle({
           setError("Байршил авахад алдаа гарлаа. Дахин оролдоно уу.");
         }
       },
-      { enableHighAccuracy: false, maximumAge: 20000, timeout: 20000 },
+      { enableHighAccuracy: true, maximumAge: 25000, timeout: 30000 },
     );
 
     return () => navigator.geolocation.clearWatch(watchId);
@@ -85,7 +118,7 @@ export default function LocationShareToggle({
           role="switch"
           aria-checked={enabled}
           aria-label="Байршил хуваалцах"
-          onClick={() => setEnabled((v) => !v)}
+          onClick={() => setShare(!enabled)}
           className={`relative h-7 w-12 shrink-0 rounded-full transition ${
             enabled ? "bg-brand" : "bg-slate-300"
           }`}

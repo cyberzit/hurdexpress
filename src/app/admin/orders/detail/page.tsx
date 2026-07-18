@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import AssignDriverModal from "@/components/admin/AssignDriverModal";
 import OrderDetailCard from "@/components/orders/OrderDetailCard";
+import OrderProofSection from "@/components/orders/OrderProofSection";
 import OrderStatusTimeline from "@/components/orders/OrderStatusTimeline";
 import ActivityTimeline from "@/components/orders/ActivityTimeline";
 import EditOrderModal from "@/components/orders/EditOrderModal";
@@ -71,6 +72,9 @@ function AdminOrderDetail() {
       <div className="mt-3 grid gap-4 lg:grid-cols-5 lg:items-start">
         <div className="space-y-4 lg:col-span-3">
           <OrderDetailCard order={order} />
+
+          {/* Хүргэлтийн баталгаажуулалт (зураг байвал) */}
+          <OrderProofSection order={order} />
 
           {/* Админ үйлдэл */}
           <Card>

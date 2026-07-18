@@ -32,7 +32,6 @@ export default function PartnerProductForm({
 }: Props) {
   const isEdit = Boolean(initial);
   const [name, setName] = useState(initial?.name ?? "");
-  const [sku, setSku] = useState(initial?.sku ?? "");
   const [price, setPrice] = useState(initial ? String(initial.price) : "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [isActive, setIsActive] = useState(initial?.isActive ?? true);
@@ -51,7 +50,7 @@ export default function PartnerProductForm({
     }
 
     // companyId/companyName нь partner-ийн өөрийнхөөс автоматаар.
-    const base = { companyId, companyName, name, sku, price: priceNum, description, isActive };
+    const base = { companyId, companyName, name, price: priceNum, description, isActive };
 
     setBusy(true);
     try {
@@ -109,10 +108,6 @@ export default function PartnerProductForm({
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className={labelClass}>SKU / код</label>
-            <input className={input} value={sku} onChange={(e) => setSku(e.target.value)} disabled={busy} />
-          </div>
           <div>
             <label className={labelClass}>Үнэ (₮) *</label>
             <input

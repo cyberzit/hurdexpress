@@ -49,6 +49,9 @@ export default function DriverForm({ initial, onClose }: Props) {
   const [serviceDistricts, setServiceDistricts] = useState<string[]>(
     initial?.serviceDistricts ?? [],
   );
+  const [bankName, setBankName] = useState(initial?.bankName ?? "");
+  const [accountNumber, setAccountNumber] = useState(initial?.accountNumber ?? "");
+  const [accountHolder, setAccountHolder] = useState(initial?.accountHolder ?? "");
   const [isActive, setIsActive] = useState(initial?.isActive ?? true);
 
   const allSelected = serviceDistricts.length === SERVICE_DISTRICTS.length;
@@ -98,6 +101,10 @@ export default function DriverForm({ initial, onClose }: Props) {
       plateNumber,
       currentStatus,
       serviceDistricts,
+      bankName: bankName.trim(),
+      accountNumber: accountNumber.trim(),
+      // Хоосон бол жолоочийн нэрийг данс эзэмшигчээр авна.
+      accountHolder: accountHolder.trim() || name.trim(),
       isActive,
     };
   }
@@ -292,6 +299,43 @@ export default function DriverForm({ initial, onClose }: Props) {
                 className={inputClass}
                 value={plateNumber}
                 onChange={(e) => setPlateNumber(e.target.value)}
+                disabled={busy}
+              />
+            </div>
+          </div>
+
+          {/* Банкны мэдээлэл — цалин/тооцоо шилжүүлэхэд */}
+          <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5">
+            <p className="mb-2.5 text-sm font-semibold text-navy">🏦 Банкны мэдээлэл</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className={labelClass}>Банкны нэр</label>
+                <input
+                  className={inputClass}
+                  value={bankName}
+                  onChange={(e) => setBankName(e.target.value)}
+                  placeholder="Жишээ: Хаан банк"
+                  disabled={busy}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Дансны дугаар</label>
+                <input
+                  className={inputClass}
+                  value={accountNumber}
+                  onChange={(e) => setAccountNumber(e.target.value)}
+                  inputMode="numeric"
+                  disabled={busy}
+                />
+              </div>
+            </div>
+            <div className="mt-3">
+              <label className={labelClass}>Данс эзэмшигчийн нэр</label>
+              <input
+                className={inputClass}
+                value={accountHolder}
+                onChange={(e) => setAccountHolder(e.target.value)}
+                placeholder="Хоосон бол жолоочийн нэрийг авна"
                 disabled={busy}
               />
             </div>

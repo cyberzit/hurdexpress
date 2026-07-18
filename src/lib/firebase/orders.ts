@@ -1,6 +1,9 @@
 import {
   addDoc,
+  arrayUnion,
   collection,
+  deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -11,11 +14,18 @@ import {
   serverTimestamp,
   updateDoc,
   where,
+  writeBatch,
   type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { isFinalOrderStatus } from "@/lib/status";
-import type { DeliveryType, Order, OrderStatus } from "@/types";
+import type {
+  DeliveryProof,
+  DeliveryType,
+  Order,
+  OrderItem,
+  OrderStatus,
+} from "@/types";
 
 const COLLECTION = "orders";
 
@@ -38,12 +48,16 @@ export interface OrderInput {
   soum?: string;
   terminalName?: string;
   location?: { lat: number; lng: number };
+  items?: OrderItem[]; // олон бараа — өгөгдвөл itemName/qty/codAmount үүнээс бодогдоно
   itemName: string;
   productId?: string;
   productName?: string;
+  productImageUrl?: string;
   qty: number;
   deliveryPrice: number;
   codAmount: number;
+  discount?: number; // хөнгөлөх дүн — нийт төлбөрөөс хасагдана
+  prepaid?: boolean; // төлбөр урьдчилж төлөгдсөн — жолооч мөнгө авахгүй
   note?: string;
   createdByUid?: string;
 }
@@ -72,9 +86,12 @@ function mapOrder(id: string, data: Record<string, unknown>): Order {
     itemName: (data.itemName as string) ?? "",
     productId: data.productId as string | undefined,
     productName: data.productName as string | undefined,
+    productImageUrl: data.productImageUrl as string | undefined,
+    items: (data.items as OrderItem[] | undefined) ?? undefined,
     qty: (data.qty as number) ?? 0,
     deliveryPrice: (data.deliveryPrice as number) ?? 0,
     codAmount: (data.codAmount as number) ?? 0,
+    discount: data.discount as number | undefined,
     totalAmount: (data.totalAmount as number) ?? 0,
     note: data.note as string | undefined,
     deliveryType: data.deliveryType as DeliveryType | undefined,
@@ -95,6 +112,8 @@ function mapOrder(id: string, data: Record<string, unknown>): Order {
         }
       : undefined,
     routeOrder: data.routeOrder as number | undefined,
+    deliveryProofs: (data.deliveryProofs as DeliveryProof[] | undefined) ?? undefined,
+    failedProofs: (data.failedProofs as DeliveryProof[] | undefined) ?? undefined,
     status: (data.status as OrderStatus) ?? "pending",
     createdByUid: data.createdByUid as string | undefined,
     driverId: data.driverId as string | undefined,
@@ -105,6 +124,9 @@ function mapOrder(id: string, data: Record<string, unknown>): Order {
     pickedUpAt: data.pickedUpAt ? toMillis(data.pickedUpAt) : undefined,
     deliveredAt: data.deliveredAt ? toMillis(data.deliveredAt) : undefined,
     codCollected: data.codCollected as boolean | undefined,
+    prepaid: Boolean(data.prepaid),
+    cashPaid: data.cashPaid as number | undefined,
+    transferPaid: data.transferPaid as number | undefined,
     driverNote: data.driverNote as string | undefined,
     cancelReason: data.cancelReason as string | undefined,
     failedReason: data.failedReason as string | undefined,
@@ -114,6 +136,12 @@ function mapOrder(id: string, data: Record<string, unknown>): Order {
     cancelledBy: data.cancelledBy as string | undefined,
     failedAt: data.failedAt ? toMillis(data.failedAt) : undefined,
     failedBy: data.failedBy as string | undefined,
+    failedNote: data.failedNote as string | undefined,
+    // Хойшлуулалт — эдгээрийг уншихгүй бол огноо/тэмдэглэл хаана ч харагдахгүй.
+    scheduledDate: data.scheduledDate as string | undefined,
+    postponedAt: data.postponedAt ? toMillis(data.postponedAt) : undefined,
+    postponedNote: data.postponedNote as string | undefined,
+    postponeProofs: (data.postponeProofs as DeliveryProof[] | undefined) ?? undefined,
     lastDriverLocation: data.lastDriverLocation
       ? {
           lat: (data.lastDriverLocation as Record<string, unknown>).lat as number,
@@ -178,8 +206,20 @@ export interface CreatedOrder {
 }
 
 export async function addOrder(input: OrderInput): Promise<CreatedOrder> {
-  // Нийт дүн = COD + хүргэлтийн үнэ (хүлээн авагчаас авах нийт мөнгө).
-  const totalAmount = input.codAmount + input.deliveryPrice;
+  const items = input.items?.filter((it) => it.productName.trim() && it.qty > 0) ?? [];
+  const hasItems = items.length > 0;
+
+  // Олон бараатай бол дүн/тоо/нэрийг мөрүүдээс бодно; эс бөгөөс хуучин талбарууд.
+  const codAmount = hasItems
+    ? items.reduce((s, it) => s + it.subtotal, 0)
+    : input.codAmount;
+  const qty = hasItems ? items.reduce((s, it) => s + it.qty, 0) : input.qty;
+  const itemName = hasItems
+    ? items.map((it) => `${it.productName} ×${it.qty}`).join(", ")
+    : input.itemName.trim();
+
+  const discount = Math.max(0, input.discount ?? 0);
+  const totalAmount = codAmount + input.deliveryPrice - discount;
   const orderCode = generateOrderCode();
 
   const payload: Record<string, unknown> = {
@@ -189,17 +229,28 @@ export async function addOrder(input: OrderInput): Promise<CreatedOrder> {
     receiverName: input.receiverName.trim(),
     receiverPhone: input.receiverPhone.trim(),
     receiverAddress: input.receiverAddress.trim(),
-    itemName: input.itemName.trim(),
-    qty: input.qty,
+    itemName,
+    qty,
     deliveryPrice: input.deliveryPrice,
-    codAmount: input.codAmount,
+    codAmount,
+    discount,
     totalAmount,
     status: "pending" as OrderStatus,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
-  if (input.productId) payload.productId = input.productId;
-  if (input.productName?.trim()) payload.productName = input.productName.trim();
+  if (hasItems) {
+    payload.items = items;
+    // Жагсаалт/картад эхний барааны нэр, зургийг харуулна (denormalized).
+    payload.productName = items[0].productName;
+    if (items[0].productId) payload.productId = items[0].productId;
+    if (items[0].productImageUrl) payload.productImageUrl = items[0].productImageUrl;
+  } else {
+    if (input.productId) payload.productId = input.productId;
+    if (input.productName?.trim()) payload.productName = input.productName.trim();
+    if (input.productImageUrl) payload.productImageUrl = input.productImageUrl;
+  }
+  if (input.prepaid) payload.prepaid = true;
   if (input.note?.trim()) payload.note = input.note.trim();
   if (input.createdByUid) payload.createdByUid = input.createdByUid;
 
@@ -268,7 +319,12 @@ export function subscribeOrder(
 // Жолоочийн талаас захиалга шинэчлэх. Статусаас хамаарч timestamp нэмнэ.
 export async function driverUpdateOrder(
   id: string,
-  fields: { status?: OrderStatus; codCollected?: boolean; driverNote?: string },
+  fields: {
+    status?: OrderStatus;
+    cashPaid?: number;
+    transferPaid?: number;
+    driverNote?: string;
+  },
 ): Promise<void> {
   const data: Record<string, unknown> = { updatedAt: serverTimestamp() };
   if (fields.status) {
@@ -276,7 +332,8 @@ export async function driverUpdateOrder(
     if (fields.status === "picked_up") data.pickedUpAt = serverTimestamp();
     if (fields.status === "delivered") data.deliveredAt = serverTimestamp();
   }
-  if (fields.codCollected !== undefined) data.codCollected = fields.codCollected;
+  if (fields.cashPaid !== undefined) data.cashPaid = fields.cashPaid;
+  if (fields.transferPaid !== undefined) data.transferPaid = fields.transferPaid;
   if (fields.driverNote !== undefined) data.driverNote = fields.driverNote.trim();
   await updateDoc(doc(db, COLLECTION, id), data);
 }
@@ -325,19 +382,87 @@ export async function cancelOrder(
   });
 }
 
-// Амжилтгүй болгох (driver/admin) → status "failed" + шалтгаан.
+// Амжилтгүй болгох (driver/admin) → status "failed" + шалтгаан (+ баталгаажуулах зураг).
 export async function failOrder(
   id: string,
   reason: string,
   failedBy: string,
+  proofs?: DeliveryProof[],
+  note?: string,
 ): Promise<void> {
-  await updateDoc(doc(db, COLLECTION, id), {
+  const data: Record<string, unknown> = {
     status: "failed" as OrderStatus,
     failedReason: reason.trim(),
     failedAt: serverTimestamp(),
     failedBy,
     updatedAt: serverTimestamp(),
+  };
+  if (proofs && proofs.length > 0) data.failedProofs = arrayUnion(...proofs);
+  const trimmed = note?.trim();
+  if (trimmed) data.failedNote = trimmed;
+  await updateDoc(doc(db, COLLECTION, id), data);
+}
+
+// Захиалгыг БҮРМӨСӨН устгах (зөвхөн admin — firestore.rules).
+// Нэг document тул харилцагч, жолоочийн дэлгэцээс нэгэн зэрэг алга болно.
+// Түгжигдсэн үлдэгдэл ба жолоочийн ачааллыг onOrderDeleted функц чөлөөлнө.
+export async function deleteOrder(id: string): Promise<void> {
+  await deleteDoc(doc(db, COLLECTION, id));
+}
+
+// Санамсаргүй "Амжилтгүй" дарсныг буцаах (driver/admin). Захиалга дахин идэвхтэй
+// болж, амжилтгүйн мэдээлэл (шалтгаан/тайлбар/зураг) устана.
+export async function revertFailedOrder(id: string, backTo: OrderStatus = "on_the_way") {
+  await updateDoc(doc(db, COLLECTION, id), {
+    status: backTo,
+    failedReason: deleteField(),
+    failedAt: deleteField(),
+    failedBy: deleteField(),
+    failedNote: deleteField(),
+    failedProofs: deleteField(),
+    updatedAt: serverTimestamp(),
   });
+}
+
+// "Дараа авна" → захиалгыг хойшлуулна. Амжилтгүй БОЛГОХГҮЙ: төлөв "assigned" руу
+// буцаж, жолооч сонгосон өдөр нь хүргэлтийн урсгалыг дахин эхлүүлнэ.
+export async function postponeOrder(
+  id: string,
+  scheduledDate: string,
+  proofs?: DeliveryProof[],
+  note?: string,
+): Promise<void> {
+  const data: Record<string, unknown> = {
+    status: "assigned" as OrderStatus,
+    scheduledDate,
+    postponedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+  if (proofs && proofs.length > 0) data.postponeProofs = arrayUnion(...proofs);
+  const trimmed = note?.trim();
+  if (trimmed) data.postponedNote = trimmed;
+  await updateDoc(doc(db, COLLECTION, id), data);
+}
+
+// Хүргэгдсэн болгох + баталгаажуулах зураг (driver). Дор хаяж 1 зураг шаардана.
+export async function deliverOrderWithProof(
+  id: string,
+  proofs: DeliveryProof[],
+  fields?: { cashPaid?: number; transferPaid?: number; driverNote?: string },
+): Promise<void> {
+  if (!proofs || proofs.length === 0) {
+    throw new Error("Хүргэлтийг баталгаажуулах дор хаяж 1 зураг шаардлагатай.");
+  }
+  const data: Record<string, unknown> = {
+    status: "delivered" as OrderStatus,
+    deliveredAt: serverTimestamp(),
+    deliveryProofs: arrayUnion(...proofs),
+    updatedAt: serverTimestamp(),
+  };
+  if (fields?.cashPaid !== undefined) data.cashPaid = fields.cashPaid;
+  if (fields?.transferPaid !== undefined) data.transferPaid = fields.transferPaid;
+  if (fields?.driverNote !== undefined) data.driverNote = fields.driverNote.trim();
+  await updateDoc(doc(db, COLLECTION, id), data);
 }
 
 // Захиалгад жолооч оноох → статус "assigned" болно.
@@ -363,6 +488,46 @@ export async function assignDriver(
     assignedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
+}
+
+export interface BulkAssignResult {
+  assigned: string[]; // амжилттай оноогдсон order id-ууд
+  skipped: string[]; // дууссан тул алгассан order id-ууд
+}
+
+// Олон захиалгад нэг жолооч оноох (batch). Дууссан захиалгыг алгасна.
+export async function bulkAssignDriver(
+  orderIds: string[],
+  driverId: string,
+  driverName: string,
+  driverPhone: string,
+): Promise<BulkAssignResult> {
+  const assigned: string[] = [];
+  const skipped: string[] = [];
+  const batch = writeBatch(db);
+
+  for (const orderId of orderIds) {
+    const ref = doc(db, COLLECTION, orderId);
+    const snap = await getDoc(ref);
+    const current = snap.data()?.status as OrderStatus | undefined;
+    if (!snap.exists() || (current && isFinalOrderStatus(current))) {
+      skipped.push(orderId);
+      continue;
+    }
+    batch.update(ref, {
+      driverId,
+      driverName,
+      driverPhone,
+      autoAssigned: false,
+      status: "assigned" as OrderStatus,
+      assignedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    assigned.push(orderId);
+  }
+
+  if (assigned.length > 0) await batch.commit();
+  return { assigned, skipped };
 }
 
 // ⚠️ DEPRECATED (security): orders read нь public биш болсон тул энэ client

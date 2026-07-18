@@ -11,8 +11,8 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
+  // "Шинэ захиалга" цэснээс хасагдсан — захиалгын жагсаалт дээр товч нь байгаа.
   { label: "Миний захиалгууд", href: "/partner/orders", icon: "📦" },
-  { label: "Шинэ захиалга", href: "/partner/orders/new", icon: "➕" },
   { label: "Миний бараа", href: "/partner/products", icon: "🛒" },
   { label: "Тооцоо", href: "/partner/settlements", icon: "🧾" },
   { label: "Гүйцэтгэл", href: "/partner/kpi", icon: "📊" },
@@ -20,8 +20,8 @@ const NAV: NavItem[] = [
 ];
 
 function isActive(pathname: string, href: string) {
-  // "/partner/orders" нь "/partner/orders/new"-г идэвхтэй болгохгүй.
-  if (href === "/partner/orders") return pathname === href;
+  // "Шинэ захиалга" цэс байхгүй болсон тул /orders/new, /orders/import зэрэг
+  // дэд хуудсууд "Миний захиалгууд"-ыг идэвхтэй болгоно.
   return pathname === href || pathname.startsWith(href + "/");
 }
 

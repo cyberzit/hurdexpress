@@ -47,6 +47,10 @@ export interface Company {
   contractPrice: number; // гэрээт хүргэлтийн үнэ (₮)
   contactPerson?: string;
   note?: string;
+  // Банкны мэдээлэл — тооцоо шилжүүлэхэд
+  bankName?: string;
+  accountNumber?: string;
+  accountHolder?: string; // данс эзэмшигч (байгууллагын нэрээс өөр байж болно)
   managerName?: string; // партнер хэрэглэгчийн нэр (нэвтрэх эзэн)
   managerEmail?: string; // партнерийн нэвтрэх имэйл (Auth)
   isActive: boolean;
@@ -119,6 +123,10 @@ export interface Driver {
   currentOrderCount: number; // идэвхтэй оноогдсон захиалгын тоо (load balancing)
   serviceDistricts?: string[]; // үйлчилдэг дүүргүүд (district matching)
   lastLocation?: { lat: number; lng: number }; // сүүлийн байршил (proximity)
+  // Банкны мэдээлэл — цалин/тооцоо шилжүүлэхэд (тооцооны тайланд харагдана)
+  bankName?: string;
+  accountNumber?: string;
+  accountHolder?: string; // данс эзэмшигчийн нэр (жолоочийн нэрээс өөр байж болно)
   // Нэвтрэх эрх (Firebase Auth)
   authUid?: string; // холбоотой Auth хэрэглэгчийн uid
   loginEmail?: string; // нэвтрэх имэйл
@@ -180,13 +188,22 @@ export interface Order {
   terminalName?: string; // хүлээн авах унаа / вокзал / терминал
   location?: { lat: number; lng: number }; // газрын зураг дээрх marker
   routeOrder?: number; // маршрут дахь дараалал (optimization)
+  deliveryProofs?: DeliveryProof[]; // хүргэгдсэн баталгаажуулалт (зураг)
+  failedProofs?: DeliveryProof[]; // амжилтгүй болсон баталгаажуулалт (зураг/screenshot)
+  // Олон бараатай захиалга. Хуучин нэг бараатай захиалгад items байхгүй —
+  // тэр тохиолдолд productId/productName/qty/codAmount талбарууд хүчинтэй.
+  items?: OrderItem[];
   itemName: string;
   productId?: string;
   productName?: string;
+  // Барааны зураг — захиалганд хуулж хадгална. Жолооч products цуглуулгыг унших
+  // эрхгүй тул (firestore.rules) зөвхөн ингэж өөрийн захиалгын зургийг харна.
+  productImageUrl?: string;
   qty: number;
   deliveryPrice: number;
-  codAmount: number;
-  totalAmount: number;
+  codAmount: number; // барааны үнэ (үнэ × тоо ширхэг)
+  discount?: number; // хөнгөлөх дүн — нийт төлбөрөөс хасагдана
+  totalAmount: number; // авах нийт төлбөр = codAmount + deliveryPrice − discount
   note?: string;
   status: OrderStatus;
   createdByUid?: string; // захиалга үүсгэсэн хэрэглэгчийн uid (мэдэгдэлд)
@@ -197,7 +214,15 @@ export interface Order {
   assignedAt?: number; // ms — жолооч оноосон
   pickedUpAt?: number; // ms — бараа авсан
   deliveredAt?: number; // ms — хүргэгдсэн
-  codCollected?: boolean; // COD цуглуулсан эсэх
+  codCollected?: boolean; // DEPRECATED — cashPaid/transferPaid ашиглана (хуучин өгөгдөлд үлдсэн)
+  // ── Төлбөр ──────────────────────────────────────────────────────────────
+  // prepaid: байгууллага захиалга үүсгэхдээ "төлбөр төлөгдсөн" гэж тэмдэглэсэн.
+  //   → жолооч мөнгө авахгүй, төлбөрийн талбарууд идэвхгүй.
+  // cashPaid + transferPaid: жолооч хэдийг бэлнээр, хэдийг шилжүүлгээр авсан.
+  //   Хагас төлөлт (жишээ: 50,000 бэлнээр + 50,000 шилжүүлсэн) ингэж илэрхийлэгдэнэ.
+  prepaid?: boolean;
+  cashPaid?: number;
+  transferPaid?: number;
   driverNote?: string; // жолоочийн тэмдэглэл
   lastDriverLocation?: OrderDriverLocation; // хүргэлтэнд яваа үед
   cancelReason?: string;
@@ -208,23 +233,50 @@ export interface Order {
   cancelledBy?: string;
   failedAt?: number;
   failedBy?: string;
+  failedNote?: string; // амжилтгүйн нэмэлт тайлбар (жолооч бичнэ)
+  // "Дараа авна" — захиалга амжилтгүй БОЛОХГҮЙ, зөвхөн хойшилно (төлөв assigned руу буцна).
+  scheduledDate?: string; // хойшилсон огноо, YYYY-MM-DD
+  postponedAt?: number; // ms — хамгийн сүүлд хойшлуулсан
+  postponedNote?: string; // хойшлуулсан шалтгааны тайлбар
+  postponeProofs?: DeliveryProof[]; // хойшлуулахад хавсаргасан зураг (failed-proofs/ зам ашиглана)
   createdAt: number; // ms
   updatedAt: number; // ms
 }
 
+// Захиалгын мөр — нэг хаяг дээр олон бараа (Firestore: orders.items)
+export interface OrderItem {
+  productId?: string;
+  productName: string;
+  productImageUrl?: string;
+  qty: number;
+  price: number; // нэгжийн үнэ
+  subtotal: number; // price × qty
+}
+
+// Хүргэлт / амжилтгүйн зургийн баталгаажуулалт (Firestore: orders.deliveryProofs / failedProofs)
+export interface DeliveryProof {
+  imageUrl: string; // download URL (webp)
+  imagePath: string; // Storage зам (устгахад)
+  uploadedAt: number; // ms
+  driverId: string;
+  lat?: number; // байршуулсан үеийн GPS
+  lng?: number;
+}
+
 // Амжилтгүй болсон шалтгааны сонголтууд (driver).
 export const FAILED_REASONS = [
-  "Утас авахгүй байна",
-  "Хаяг буруу байна",
-  "Хүлээн авагч байхгүй",
-  "Захиалга авахаас татгалзсан",
-  "Бусад",
+  "Хаяг дээр очсон",
+  "Утасаа аваагүй",
+  "Холбогдох боломжгүй",
+  "Хүлээн авагч татгалзсан",
+  "Дараа авна",
+  "Хойшилсон",
 ] as const;
 
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   pending: "Шинэ",
   assigned: "Жолоочид оноосон",
-  picked_up: "Бараа авсан",
+  picked_up: "Жолооч хүлээн авсан",
   on_the_way: "Замдаа",
   delivered: "Хүргэгдсэн",
   failed: "Амжилтгүй",
@@ -297,8 +349,12 @@ export interface GeneralSettings {
   brandName: string;
   aboutText: string; // нүүр (login) хуудасны "Бидний тухай" текст
   phone: string;
+  secondaryPhone?: string; // нэмэлт утас
   email?: string;
   address?: string;
+  facebookUrl?: string; // Facebook хуудасны холбоос
+  brochureUrl?: string; // танилцуулга (PDF) татах холбоос
+  brochureName?: string; // танилцуулгын файлын нэр (харуулахад)
   defaultDeliveryPrice: number;
   zoneName: string;
   logoUrl?: string;
@@ -402,6 +458,12 @@ export interface DriverSettlement {
   cashCollected: number; // бэлнээр цуглуулсан (codCollected===true)
   handedAmount: number; // тушаасан дүн
   differenceAmount: number; // codCollected - handedAmount
+  // Admin тооцоо нийлүүлэлт (Deligo загварын тайлан)
+  deliveryTotal?: number; // жолоочийн олговор (хүргэлтийн үнийн нийлбэр)
+  payable?: number; // тушаах дүн = codCollected - deliveryTotal
+  reconciled?: boolean; // admin "тооцоо нийлсэн" гэж тэмдэглэсэн эсэх
+  reconciledAt?: number;
+  reconciledBy?: string;
   status: DriverSettlementStatus;
   submittedAt?: number;
   approvedAt?: number;

@@ -254,7 +254,7 @@ export async function runSmokeTest(
     await run("status", "Driver status (pending→delivered)", async () => {
       await driverUpdateOrder(a.orderId!, { status: "picked_up" });
       await driverUpdateOrder(a.orderId!, { status: "on_the_way" });
-      await driverUpdateOrder(a.orderId!, { status: "delivered", codCollected: true });
+      await driverUpdateOrder(a.orderId!, { status: "delivered", cashPaid: 1000 });
       const snap = await getDoc(doc(db, "orders", a.orderId!));
       const st = snap.data()?.status;
       if (st !== "delivered") throw new Error(`Эцсийн статус delivered биш: ${st}`);

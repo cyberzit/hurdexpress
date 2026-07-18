@@ -1,6 +1,7 @@
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import {
   onDocumentCreated,
+  onDocumentDeleted,
   onDocumentUpdated,
   onDocumentWritten,
 } from "firebase-functions/v2/firestore";
@@ -293,6 +294,32 @@ async function applyStockMovement(
   });
 }
 
+// Захиалгын бүх барааны мөрөнд үлдэгдлийн хөдөлгөөн хийнэ.
+// Олон бараатай захиалгад items[], хуучин нэг бараатайд productId/qty.
+async function applyStockForOrder(
+  order: Record<string, unknown>,
+  type: "reserve" | "release" | "out",
+  orderId: string,
+): Promise<void> {
+  const items = order.items as
+    | Array<{ productId?: string; qty?: number }>
+    | undefined;
+
+  if (Array.isArray(items) && items.length > 0) {
+    for (const it of items) {
+      if (it.productId) {
+        await applyStockMovement(it.productId, type, it.qty ?? 0, orderId);
+      }
+    }
+    return;
+  }
+
+  const productId = order.productId as string | undefined;
+  if (productId) {
+    await applyStockMovement(productId, type, (order.qty as number) ?? 0, orderId);
+  }
+}
+
 // Жолоочийн идэвхтэй захиалгын тоог +/- (0-оос доош болохгүй).
 async function adjustDriverCount(driverId: string, delta: number): Promise<void> {
   const ref = db.doc(`drivers/${driverId}`);
@@ -397,11 +424,9 @@ export const onOrderCreated = onDocumentCreated(
       message: `Таны ${o.orderCode} захиалга HurdExpress хүргэлтэд бүртгэгдлээ.`,
     });
 
-    // Барааны үлдэгдэл түгжих (reserve) — productId-тэй захиалгад.
+    // Барааны үлдэгдэл түгжих (reserve) — бүх барааны мөрөнд.
     try {
-      if (o.productId) {
-        await applyStockMovement(o.productId, "reserve", o.qty ?? 0, event.params.orderId);
-      }
+      await applyStockForOrder(o, "reserve", event.params.orderId);
     } catch (err) {
       console.error("reserve stock failed", err);
     }
@@ -465,13 +490,13 @@ export const onOrderUpdated = onDocumentUpdated(
     }
 
     // Барааны үлдэгдэл: хүргэгдсэн → out (stock-), цуцлагдсан/амжилтгүй → release.
-    if (after.productId && becameTerminal) {
+    if (becameTerminal) {
       try {
-        if (after.status === "delivered") {
-          await applyStockMovement(after.productId, "out", after.qty ?? 0, event.params.orderId);
-        } else {
-          await applyStockMovement(after.productId, "release", after.qty ?? 0, event.params.orderId);
-        }
+        await applyStockForOrder(
+          after,
+          after.status === "delivered" ? "out" : "release",
+          event.params.orderId,
+        );
       } catch (err) {
         console.error("stock movement on terminal failed", err);
       }
@@ -586,4 +611,35 @@ export const sendOrderSms = onCall(async (request) => {
     message,
   });
   return { ok: true };
+});
+
+// ── Захиалга устгах (зөвхөн admin) ────────────────────────────────────────
+// Устгасан баримт дээр onOrderUpdated ажиллахгүй тул түгжигдсэн үлдэгдэл болон
+// жолоочийн ачааллын тоолуур гацна. Тиймээс энд гараар чөлөөлнө.
+export const onOrderDeleted = onDocumentDeleted("orders/{orderId}", async (event) => {
+  const o = event.data?.data();
+  if (!o) return;
+
+  const TERMINAL = ["delivered", "failed", "cancelled"];
+  const wasActive = !TERMINAL.includes(o.status as string);
+
+  // Идэвхтэй захиалга устсан → жолоочийн идэвхтэй тоог -1.
+  if (wasActive && o.driverId) {
+    try {
+      await adjustDriverCount(o.driverId as string, -1);
+    } catch (err) {
+      console.error("driver count release on delete failed", err);
+    }
+  }
+
+  // Үлдэгдэл: идэвхтэй үед reserve хэвээр байсан тул release хийнэ.
+  // delivered (out хийгдсэн) болон failed/cancelled (release хийгдсэн) дээр
+  // дахин хөдөлгөвөл тоо буруудна — тиймээс зөвхөн идэвхтэй захиалгад.
+  if (wasActive) {
+    try {
+      await applyStockForOrder(o, "release", event.params.orderId);
+    } catch (err) {
+      console.error("stock release on delete failed", err);
+    }
+  }
 });
